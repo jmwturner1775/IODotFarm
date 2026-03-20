@@ -1,0 +1,3873 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>IO Dot Farm</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{-webkit-font-smoothing:antialiased}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#EDE3D0;border-radius:4px}::-webkit-scrollbar-thumb{background:#B8A88A;border-radius:4px;min-height:30px}::-webkit-scrollbar-thumb:hover{background:#8B7D6B}*{scrollbar-width:thin;scrollbar-color:#B8A88A #EDE3D0}input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}input[type="number"]{-moz-appearance:textfield}</style>
+</head><body><div id="root"></div><script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ─── Persistence Hook (localStorage) ─── */
+function usePersistedState(key, defaultValue) {
+  const [state, setState] = useState(() => {
+    try { const stored = localStorage.getItem(key); return stored ? JSON.parse(stored) : defaultValue; } catch { return defaultValue; }
+  });
+  const [loaded] = useState(true);
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [state, key]);
+  return [state, setState, loaded];
+}
+
+/* ─── Constants ─── */
+const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Health", "Life"];
+const WEATHER = {
+  current: { temp: 14, condition: "Sunny", icon: "☀️" },
+  forecast: [
+    { day: "Wed", high: 17, rain: 0, icon: "☀️" },
+    { day: "Thu", high: 16, rain: 10, icon: "⛅" },
+    { day: "Fri", high: 13, rain: 10, icon: "⛅" },
+    { day: "Sat", high: 14, rain: 10, icon: "🌥️" },
+    { day: "Sun", high: 13, rain: 10, icon: "🌥️" },
+  ],
+};
+const RSS_FEEDS = [
+  { name: "Financial Times", rss: "https://www.ft.com/myft/following/abd5d2f3-6ab0-4b25-ac17-352cc22015c0.rss", color: "#C49A6C" },
+  { name: "BBC News", rss: "http://newsrss.bbc.co.uk/rss/newsonline_uk_edition/front_page/rss.xml", color: "#8B3A3A" },
+  { name: "The Guardian", rss: "https://www.theguardian.com/uk/rss", color: "#5B7A6A" },
+];
+const HOME_FEED = [
+  { name: "Top Stories", rss: "https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en", color: "#4285F4" },
+];
+
+const FONT_LINK = "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap";
+
+/* ─── Styles ─── */
+const theme = {
+  salmon: "#F5E6D0",
+  paper: "#FDFAF5",
+  dark: "#2C2418",
+  text: "#3D3428",
+  teal: "#5B7A6A",
+  crimson: "#8B3A3A",
+  wheat: "#E8D5B8",
+  border: "#C9B99A",
+  muted: "#7A6E5D",
+  light: "#EDE3D0",
+};
+
+const base = {
+  fontSerif: "'Playfair Display', Georgia, serif",
+  fontBody: "'Source Serif 4', Georgia, serif",
+  fontSans: "'IBM Plex Sans', sans-serif",
+};
+
+/* ─── Sub-Components ─── */
+
+function Masthead({ page, setPage, entries }) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-GB", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+
+  // Mood face from last 3 journal entries with energy
+  const withEnergy = (entries || []).filter((e) => e.energy).slice(0, 3);
+  let moodFace = null;
+  if (withEnergy.length > 0) {
+    const avg = withEnergy.reduce((a, e) => a + e.energy, 0) / withEnergy.length;
+    const level = Math.round(avg);
+    const faces = {
+      1: { face: ":(", color: "#4A6FA5" },
+      2: { face: ":/", color: "#6A8EBF" },
+      3: { face: ":|", color: "#8B8B5E" },
+      4: { face: ":)", color: "#BF7B4A" },
+      5: { face: ":D", color: "#A84032" },
+    };
+    const { face, color } = faces[level] || faces[3];
+    moodFace = { face, color };
+  }
+
+  return (
+    <header style={{ borderBottom: `1px solid ${theme.dark}`, padding: "16px 0 0", marginBottom: 0, background: theme.salmon }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", position: "relative" }}>
+        {/* Mood face — top left */}
+        <div style={{ position: "absolute", left: 24, top: "50%", transform: "translateY(-50%)" }}>
+          {moodFace && (
+            <span style={{ fontFamily: base.fontSans, fontSize: 22, color: moodFace.color, fontWeight: 700 }}>
+              {moodFace.face}
+            </span>
+          )}
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <h1 style={{ fontFamily: base.fontSerif, fontSize: "clamp(22px, 3.5vw, 34px)", fontWeight: 900, color: theme.dark, margin: "4px 0", letterSpacing: -1, lineHeight: 1 }}>
+            IO Dot Farm
+          </h1>
+          <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", marginBottom: 12 }}>
+            {dateStr}
+          </div>
+        </div>
+        {/* Weather — top right */}
+        <div style={{
+          position: "absolute", right: 24, top: "50%", transform: "translateY(-50%)",
+        }} title={`${WEATHER.current.temp}°C — ${WEATHER.current.condition}`}>
+          <span style={{ fontSize: 24, lineHeight: 1 }}>{WEATHER.current.icon}</span>
+        </div>
+      </div>
+      <nav style={{ display: "flex", gap: 0, borderTop: `1px solid ${theme.border}`, overflow: "auto", alignItems: "center" }}>
+        {PAGES.map((p) => (
+          <button
+            key={p}
+            onClick={() => setPage(p)}
+            style={{
+              flex: 1,
+              padding: "10px 12px",
+              fontFamily: base.fontSans,
+              fontSize: 11,
+              fontWeight: page === p ? 600 : 400,
+              color: page === p ? theme.crimson : theme.text,
+              background: page === p ? theme.paper : "transparent",
+              border: "none",
+              borderBottom: page === p ? `3px solid ${theme.crimson}` : "3px solid transparent",
+              cursor: "pointer",
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+              transition: "all 0.2s",
+            }}
+          >
+            {p}
+          </button>
+        ))}
+      </nav>
+    </header>
+  );
+}
+
+function Card({ title, children, style: s = {}, accent = false }) {
+  return (
+    <div style={{
+      background: theme.paper,
+      border: `1px solid ${theme.border}`,
+      padding: 20,
+      borderTop: accent ? `3px solid ${theme.crimson}` : `1px solid ${theme.border}`,
+      ...s,
+    }}>
+      {title && (
+        <h3 style={{
+          fontFamily: base.fontSans,
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: 1.5,
+          color: theme.crimson,
+          margin: "0 0 14px",
+          paddingBottom: 8,
+          borderBottom: `1px solid ${theme.light}`,
+        }}>
+          {title}
+        </h3>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/* ─── RSS Feed Hook ─── */
+const _rssCache = {};
+const _rssPending = {};
+
+function useRssFeeds(feeds) {
+  const [articles, setArticles] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function parseRssXml(xmlText) {
+      try {
+        if (!xmlText || typeof xmlText !== "string") return [];
+        const clean = xmlText.trim().replace(/^\uFEFF/, "");
+        if (!clean.includes("<item") && !clean.includes("<entry")) return [];
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(clean, "text/xml");
+        if (doc.querySelector("parsererror")) return [];
+        let items = [...doc.querySelectorAll("item")];
+        if (items.length === 0) items = [...doc.querySelectorAll("entry")];
+        return items.slice(0, 25).map((item) => {
+          const getText = (tags) => {
+            for (const tag of tags) {
+              const el = item.querySelector(tag);
+              if (el?.textContent?.trim()) return el.textContent.trim();
+            }
+            return "";
+          };
+          const getLink = () => {
+            const linkEl = item.querySelector("link");
+            return linkEl?.getAttribute("href") || linkEl?.textContent?.trim() || "";
+          };
+          const getImage = () => {
+            const enc = item.querySelector("enclosure");
+            if (enc?.getAttribute("url")) return enc.getAttribute("url");
+            // Scan all child elements for media:thumbnail, media:content, etc.
+            const allEls = item.getElementsByTagName("*");
+            for (let j = 0; j < allEls.length; j++) {
+              const el = allEls[j];
+              const ln = (el.localName || el.tagName || "").toLowerCase();
+              if ((ln === "thumbnail" || ln === "content" || ln === "media:thumbnail" || ln === "media:content") && el.getAttribute("url")) return el.getAttribute("url");
+            }
+            // YouTube: extract video ID and build thumbnail URL
+            const linkText = item.querySelector("link")?.getAttribute("href") || item.querySelector("link")?.textContent || "";
+            const ytMatch = linkText.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+            if (ytMatch) return `https://i.ytimg.com/vi/${ytMatch[1]}/mqdefault.jpg`;
+            // yt:videoId element
+            for (let j = 0; j < allEls.length; j++) {
+              const el = allEls[j];
+              const ln = (el.localName || el.tagName || "").toLowerCase();
+              if ((ln === "videoid" || ln === "yt:videoid") && el.textContent) return `https://i.ytimg.com/vi/${el.textContent.trim()}/mqdefault.jpg`;
+            }
+            // Image in description HTML
+            const descHtml = item.querySelector("description")?.textContent || item.querySelector("summary")?.textContent || "";
+            const imgMatch = descHtml.match(/<img[^>]+src=["']([^"']+)/);
+            if (imgMatch) return imgMatch[1];
+            const urlMatch = descHtml.match(/(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|gif|webp))/i);
+            if (urlMatch) return urlMatch[1];
+            return "";
+          };
+          const desc = getText(["description", "summary", "content"]).replace(/<[^>]*>/g, "").slice(0, 140);
+          return {
+            title: getText(["title"]),
+            link: getText(["link"]) || getLink(),
+            pubDate: getText(["pubDate", "published", "updated", "dc\\:date"]),
+            description: desc,
+            image: getImage(),
+          };
+        }).filter((a) => a.title);
+      } catch { return []; }
+    }
+
+    async function tryFetch(url, timeout = 6000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        return resp;
+      } catch (e) { clearTimeout(timer); throw e; }
+    }
+
+    async function fetchFeedRaw(rssUrl) {
+      // 1: Direct
+      try { const r = await tryFetch(rssUrl, 3000); if (r.ok) { const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } } catch {}
+      // 2: rss2json (best for YouTube)
+      try {
+        const r = await tryFetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`, 8000);
+        const d = await r.json();
+        if (d.status === "ok" && d.items?.length > 0) return d.items.slice(0, 25).map((item) => {
+          let img = item.thumbnail || item.enclosure?.link || "";
+          // YouTube: extract thumbnail from video link
+          if (!img && item.link) {
+            const ytm = item.link.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+            if (ytm) img = `https://i.ytimg.com/vi/${ytm[1]}/mqdefault.jpg`;
+          }
+          // Pinterest: extract image from description HTML
+          if (!img && item.description) {
+            const m = item.description.match(/<img[^>]+src=["']([^"']+)/);
+            if (m) img = m[1];
+          }
+          return { title: item.title || "", link: item.link || "", pubDate: item.pubDate || "", description: (item.description || "").replace(/<[^>]*>/g, "").slice(0, 140), image: img };
+        });
+      } catch {}
+      // 3: allorigins /get
+      try { const r = await tryFetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`); const json = await r.json(); if (json.contents) { const p = parseRssXml(json.contents); if (p.length > 0) return p; } } catch {}
+      // 4: corsproxy.io
+      try { const r = await tryFetch(`https://corsproxy.io/?url=${encodeURIComponent(rssUrl)}`); const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } catch {}
+      // 5: codetabs
+      try { const r = await tryFetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(rssUrl)}`); const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } catch {}
+      // 6: allorigins /raw
+      try { const r = await tryFetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`); const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } catch {}
+      return [];
+    }
+
+    // Cached + deduplicated fetch
+    async function fetchFeed(rssUrl) {
+      if (_rssCache[rssUrl] && Date.now() - _rssCache[rssUrl].time < 300000) return _rssCache[rssUrl].data;
+      if (_rssPending[rssUrl]) return _rssPending[rssUrl];
+      const promise = fetchFeedRaw(rssUrl).then((data) => { _rssCache[rssUrl] = { data, time: Date.now() }; delete _rssPending[rssUrl]; return data; });
+      _rssPending[rssUrl] = promise;
+      return promise;
+    }
+
+    async function fetchAll() {
+      setLoading(true);
+      const results = {};
+      // Fetch all feeds in parallel
+      const promises = feeds.map(async (feed) => {
+        if (cancelled) return;
+        const data = await fetchFeed(feed.rss);
+        results[feed.name] = data;
+        // Update progressively as each feed arrives
+        if (!cancelled) setArticles((prev) => ({ ...prev, [feed.name]: data }));
+      });
+      await Promise.allSettled(promises);
+      if (!cancelled) { setArticles(results); setLoading(false); }
+    }
+
+    fetchAll();
+    // Force loading to false after 10s even if fetches haven't completed (sandbox protection)
+    const loadingTimeout = setTimeout(() => { if (!cancelled) setLoading(false); }, 20000);
+    const interval = setInterval(fetchAll, 10 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); clearTimeout(loadingTimeout); };
+  }, []);
+
+  return { articles, loading };
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+/* ─── RSS Sidebar Component ─── */
+function RssSidebar({ activeFeed, setActiveFeed }) {
+  const { articles, loading } = useRssFeeds(RSS_FEEDS);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, overflow: "hidden" }}>
+      {/* Feed Tabs */}
+      <div style={{
+        display: "flex", borderBottom: `1px solid ${theme.border}`,
+        background: theme.paper, position: "sticky", top: 0, zIndex: 1,
+      }}>
+        {RSS_FEEDS.map((f) => (
+          <button
+            key={f.name}
+            onClick={() => setActiveFeed(f.name)}
+            style={{
+              flex: 1, padding: "8px 6px", fontFamily: base.fontSans, fontSize: 10,
+              fontWeight: activeFeed === f.name ? 600 : 400,
+              color: activeFeed === f.name ? theme.dark : theme.muted,
+              background: activeFeed === f.name ? theme.paper : theme.salmon,
+              border: "none", borderBottom: activeFeed === f.name ? `2px solid ${f.color}` : "2px solid transparent",
+              cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}
+          >
+            {f.name.replace("The ", "")}
+          </button>
+        ))}
+      </div>
+
+      {/* Articles */}
+      <div style={{ background: theme.paper, border: `1px solid ${theme.border}`, borderTop: "none", minHeight: 200, maxHeight: 600, overflowY: "auto" }}>
+        {loading ? (
+          <div style={{ padding: 20, textAlign: "center" }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic" }}>Fetching headlines...</div>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.border, marginTop: 6 }}>Feeds load on self-hosted version</div>
+          </div>
+        ) : (
+          <div>
+            {(articles[activeFeed] || []).map((item, i) => (
+              <a
+                key={i}
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "block", padding: "10px 14px",
+                  borderBottom: i < (articles[activeFeed]?.length || 0) - 1 ? `1px solid ${theme.light}` : "none",
+                  textDecoration: "none", transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div style={{
+                  fontFamily: base.fontBody, fontSize: 13, fontWeight: 400,
+                  color: theme.text, lineHeight: 1.35, marginBottom: 3,
+                  wordBreak: "break-word",
+                }}>
+                  {item.title}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {item.description && (
+                    <div style={{
+                      fontFamily: base.fontSans, fontSize: 11, color: theme.muted,
+                      lineHeight: 1.3, flex: 1, marginRight: 8,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {item.description}
+                    </div>
+                  )}
+                  <div style={{
+                    fontFamily: base.fontSans, fontSize: 10, color: theme.teal,
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                    {timeAgo(item.pubDate)}
+                  </div>
+                </div>
+              </a>
+            ))}
+            {(!articles[activeFeed] || articles[activeFeed].length === 0) && (
+              <div style={{ padding: 20, textAlign: "center", fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic" }}>
+                Could not load this feed — try refreshing.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Claude Query Chat ─── */
+function ClaudeQuery() {
+  const [apiKey, setApiKey, keyLoaded] = usePersistedState("daily-brief:claude-key", "");
+  const [keyInput, setKeyInput] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const saveKey = () => {
+    if (keyInput.trim()) { setApiKey(keyInput.trim()); setKeyInput(""); }
+  };
+
+  const logout = () => {
+    setApiKey("");
+    setMessages([]);
+  };
+
+  const send = async () => {
+    if (!input.trim() || loading || !apiKey) return;
+    const userMsg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-opus-4-6",
+          max_tokens: 1000,
+          system: "You are a helpful study assistant embedded in a personal dashboard called IO Dot Farm. Keep responses concise and practical. The user is a UK university student.",
+          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const data = await response.json();
+      if (data.error) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error.message || "Unknown error"}` }]);
+      } else {
+        const text = data.content?.map((b) => b.type === "text" ? b.text : "").join("") || "No response.";
+        setMessages((prev) => [...prev, { role: "assistant", content: text }]);
+      }
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Connection error — check your API key and internet." }]);
+    }
+    setLoading(false);
+  };
+
+  if (!keyLoaded) return null;
+
+  // Login screen
+  if (!apiKey) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "10px 0" }}>
+        <div style={{ fontFamily: base.fontSerif, fontSize: 16, fontWeight: 600, color: theme.dark, textAlign: "center" }}>
+          Sign in to Claude
+        </div>
+        <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, textAlign: "center", lineHeight: 1.5 }}>
+          Enter your Anthropic API key to chat with Claude Opus 4.6
+        </div>
+        <input
+          type="password"
+          value={keyInput}
+          onChange={(e) => setKeyInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") saveKey(); }}
+          placeholder="sk-ant-api03-..."
+          style={{
+            fontFamily: base.fontSans, fontSize: 12, padding: "8px 10px",
+            border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none",
+          }}
+        />
+        <button onClick={saveKey} style={{
+          fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 16px",
+          border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+          textTransform: "uppercase", letterSpacing: 0.5,
+          opacity: keyInput.trim() ? 1 : 0.4,
+        }}>
+          Connect
+        </button>
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer"
+          style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, textAlign: "center" }}>
+          Get an API key →
+        </a>
+      </div>
+    );
+  }
+
+  // Chat interface
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Header with logout */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal }}>Connected</span>
+        <button onClick={logout} style={{
+          fontFamily: base.fontSans, fontSize: 9, color: theme.muted, background: "none",
+          border: `1px solid ${theme.border}`, padding: "2px 8px", cursor: "pointer",
+        }}>
+          Logout
+        </button>
+      </div>
+      {/* Messages */}
+      <div style={{
+        flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8,
+        marginBottom: 10, minHeight: 200, maxHeight: "calc(100vh - 340px)",
+      }}>
+        {messages.length === 0 && (
+          <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", padding: "20px 0", textAlign: "center" }}>
+            Ask me anything...
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{
+            padding: "8px 12px",
+            background: m.role === "user" ? theme.dark : theme.light,
+            color: m.role === "user" ? theme.paper : theme.text,
+            fontFamily: base.fontSans, fontSize: 12, lineHeight: 1.5,
+            borderRadius: 2,
+            alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+            maxWidth: "90%", whiteSpace: "pre-wrap",
+          }}>
+            {m.content}
+          </div>
+        ))}
+        {loading && (
+          <div style={{
+            padding: "8px 12px", background: theme.light, fontFamily: base.fontSans,
+            fontSize: 12, color: theme.muted, fontStyle: "italic", alignSelf: "flex-start",
+          }}>
+            Thinking...
+          </div>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+      {/* Input */}
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Ask Claude..."
+          style={{
+            flex: 1, fontFamily: base.fontSans, fontSize: 12, padding: "8px 10px",
+            border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none",
+          }}
+        />
+        <button onClick={send} style={{
+          fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 14px",
+          border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+          textTransform: "uppercase", letterSpacing: 0.5,
+          opacity: input.trim() && !loading ? 1 : 0.4,
+        }}>
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── WEBSITES PANEL ─── */
+function WebsitesPanel() {
+  const [sites, setSites, loaded] = usePersistedState("daily-brief:websites", []);
+  const [nameInput, setNameInput] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [starred, setStarred] = useState(false);
+
+  const addSite = () => {
+    if (!nameInput.trim() || !urlInput.trim()) return;
+    let url = urlInput.trim();
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    setSites((prev) => [...prev, { id: Date.now(), name: nameInput.trim(), url, star: starred }]);
+    setNameInput(""); setUrlInput(""); setStarred(false);
+  };
+
+  const removeSite = (id) => setSites((prev) => prev.filter((s) => s.id !== id));
+  const toggleStar = (id) => setSites((prev) => prev.map((s) => s.id === id ? { ...s, star: !s.star } : s));
+
+  const topSites = sites.filter((s) => s.star).sort((a, b) => a.name.localeCompare(b.name));
+  const otherSites = sites.filter((s) => !s.star).sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!loaded) return null;
+
+  return (
+    <div style={{ position: "sticky", top: 16 }}>
+      <Card title="Websites" accent>
+        {/* Add site form */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${theme.light}` }}>
+          <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addSite(); }} placeholder="Site name"
+            style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+          <div style={{ display: "flex", gap: 4 }}>
+            <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addSite(); }}
+              placeholder="URL"
+              style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+            <button onClick={() => setStarred(!starred)} style={{
+              fontFamily: base.fontSans, fontSize: 14, padding: "4px 8px", cursor: "pointer",
+              border: `1px solid ${starred ? "#C9A227" : theme.border}`,
+              background: starred ? "#C9A227" : "transparent",
+              color: starred ? theme.paper : theme.muted, borderRadius: 2,
+              lineHeight: 1,
+            }} title="Star this site">★</button>
+          </div>
+          <button onClick={addSite} style={{
+            fontFamily: base.fontSans, fontSize: 10, fontWeight: 600, padding: "6px 0", width: "100%",
+            border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+            textTransform: "uppercase", letterSpacing: 0.5,
+            opacity: nameInput.trim() && urlInput.trim() ? 1 : 0.4,
+          }}>Add</button>
+        </div>
+
+        {/* Top Sites */}
+        {topSites.length > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Top Sites</div>
+            {topSites.map((s) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 0", borderBottom: `1px solid ${theme.light}` }}>
+                <button onClick={() => toggleStar(s.id)} style={{ fontSize: 11, color: "#C9A227", background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>★</button>
+                <a href={s.url} target="_blank" rel="noopener noreferrer" style={{
+                  fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.teal,
+                  textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{s.name}</a>
+                <button onClick={() => removeSite(s.id)} style={{ fontSize: 11, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Websites */}
+        {otherSites.length > 0 && (
+          <div>
+            <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Websites</div>
+            {otherSites.map((s) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 0", borderBottom: `1px solid ${theme.light}` }}>
+                <button onClick={() => toggleStar(s.id)} style={{ fontSize: 11, color: theme.border, background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>☆</button>
+                <a href={s.url} target="_blank" rel="noopener noreferrer" style={{
+                  fontFamily: base.fontSans, fontSize: 11, color: theme.text,
+                  textDecoration: "none", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{s.name}</a>
+                <button onClick={() => removeSite(s.id)} style={{ fontSize: 11, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {sites.length === 0 && (
+          <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>
+            Add your favourite sites above.
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ─── CALENDAR BOX ─── */
+function CalendarBox() {
+  const [events, setEvents, loaded] = usePersistedState("daily-brief:calendar", []);
+  const [calUrl, setCalUrl, calUrlLoaded] = usePersistedState("daily-brief:calendar-url", "");
+  const [urlInput, setUrlInput] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const fileRef = useRef(null);
+
+  const parseIcs = (text) => {
+    const parsed = [];
+    const blocks = text.split("BEGIN:VEVENT");
+    for (let i = 1; i < blocks.length; i++) {
+      const block = blocks[i].split("END:VEVENT")[0];
+      const get = (key) => {
+        const lines = block.split("\n");
+        let val = "";
+        for (let j = 0; j < lines.length; j++) {
+          const line = lines[j].replace(/\r/g, "");
+          if (line.startsWith(key + ":") || line.startsWith(key + ";")) {
+            val = line.substring(line.indexOf(":") + 1);
+            // Handle folded lines
+            while (j + 1 < lines.length && /^[ \t]/.test(lines[j + 1])) {
+              j++;
+              val += lines[j].replace(/\r/g, "").substring(1);
+            }
+            break;
+          }
+        }
+        return val.replace(/\\n/g, "\n").replace(/\\,/g, ",").replace(/\\\\/g, "\\").trim();
+      };
+
+      const parseDate = (raw) => {
+        if (!raw) return null;
+        // Handle YYYYMMDD or YYYYMMDDTHHmmssZ or YYYYMMDDTHHmmss
+        const clean = raw.replace(/[^0-9T]/g, "");
+        if (clean.length >= 8) {
+          const y = clean.slice(0, 4), m = clean.slice(4, 6), d = clean.slice(6, 8);
+          const h = clean.length >= 11 ? clean.slice(9, 11) : "00";
+          const min = clean.length >= 13 ? clean.slice(11, 13) : "00";
+          return new Date(`${y}-${m}-${d}T${h}:${min}:00`);
+        }
+        return null;
+      };
+
+      const summary = get("SUMMARY");
+      const dtStart = parseDate(get("DTSTART"));
+      const dtEnd = parseDate(get("DTEND"));
+      const location = get("LOCATION");
+      const description = get("DESCRIPTION");
+
+      if (summary && dtStart) {
+        parsed.push({ summary, start: dtStart.toISOString(), end: dtEnd ? dtEnd.toISOString() : null, location, description });
+      }
+    }
+    return parsed.sort((a, b) => new Date(a.start) - new Date(b.start));
+  };
+
+  const handleUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    file.text().then((text) => {
+      const parsed = parseIcs(text);
+      if (parsed.length > 0) setEvents(parsed);
+    });
+    e.target.value = "";
+  };
+
+  const fetchFromUrl = async (url) => {
+    if (!url) return;
+    setFetching(true);
+    const proxies = [
+      (u) => u,
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    ];
+    for (const proxy of proxies) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(proxy(url), { signal: controller.signal });
+        clearTimeout(timer);
+        if (r.ok) {
+          const text = await r.text();
+          const parsed = parseIcs(text);
+          if (parsed.length > 0) { setEvents(parsed); setCalUrl(url); setFetching(false); return; }
+        }
+      } catch {}
+    }
+    setFetching(false);
+  };
+
+  // Auto-refresh from saved URL on load
+  useEffect(() => {
+    if (loaded && calUrlLoaded && calUrl) fetchFromUrl(calUrl);
+  }, [loaded, calUrlLoaded]);
+
+  if (!loaded) return null;
+
+  const now = new Date();
+  const upcoming = events.filter((ev) => new Date(ev.start) >= new Date(now.toISOString().slice(0, 10)));
+  const past = events.filter((ev) => new Date(ev.start) < new Date(now.toISOString().slice(0, 10)));
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tmrw = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
+    const evDay = new Date(d); evDay.setHours(0,0,0,0);
+    let dayStr;
+    if (evDay.getTime() === today.getTime()) dayStr = "Today";
+    else if (evDay.getTime() === tmrw.getTime()) dayStr = "Tomorrow";
+    else dayStr = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    const h = d.getHours(), m = d.getMinutes();
+    if (h === 0 && m === 0) return dayStr;
+    return `${dayStr}, ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  };
+
+  return (
+    <Card title="Calendar">
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${theme.light}` }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && urlInput.trim()) { fetchFromUrl(urlInput.trim()); setUrlInput(""); } }}
+            placeholder=".ics link"
+            style={{ flex: 1, fontFamily: base.fontSans, fontSize: 10, padding: "5px 6px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+          <button onClick={() => { if (urlInput.trim()) { fetchFromUrl(urlInput.trim()); setUrlInput(""); } }} style={{
+            fontFamily: base.fontSans, fontSize: 9, padding: "3px 8px",
+            border: `1px solid ${theme.border}`, background: theme.dark, color: theme.paper,
+            cursor: "pointer", letterSpacing: 0.3, opacity: urlInput.trim() ? 1 : 0.4,
+          }}>{fetching ? "…" : "Sync"}</button>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>
+            {events.length} event{events.length !== 1 ? "s" : ""}{calUrl ? " · linked" : ""}
+          </span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {calUrl && (
+              <button onClick={() => fetchFromUrl(calUrl)} style={{
+                fontFamily: base.fontSans, fontSize: 9, padding: "3px 6px",
+                border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.teal,
+                cursor: "pointer", letterSpacing: 0.3,
+              }}>{fetching ? "…" : "↻"}</button>
+            )}
+            <input ref={fileRef} type="file" accept=".ics,.ical" style={{ display: "none" }} onChange={handleUpload} />
+            <button onClick={() => fileRef.current?.click()} style={{
+              fontFamily: base.fontSans, fontSize: 9, padding: "3px 8px",
+              border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text,
+              cursor: "pointer", letterSpacing: 0.3,
+            }}>File</button>
+          </div>
+        </div>
+      </div>
+
+      {events.length === 0 ? (
+        <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>
+          Upload a .ics file to see your calendar.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 280, overflowY: "auto" }}>
+          {upcoming.slice(0, 15).map((ev, i) => {
+            const isToday = new Date(ev.start).toISOString().slice(0, 10) === now.toISOString().slice(0, 10);
+            return (
+              <div key={i} style={{
+                padding: "6px 0", borderBottom: `1px solid ${theme.light}`,
+                borderLeft: isToday ? `3px solid ${theme.crimson}` : "3px solid transparent",
+                paddingLeft: 8,
+              }}>
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.text, lineHeight: 1.3 }}>{ev.summary}</div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal, marginTop: 2 }}>{formatDate(ev.start)}</div>
+                {ev.location && <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, marginTop: 1 }}>{ev.location}</div>}
+              </div>
+            );
+          })}
+          {past.length > 0 && upcoming.length > 0 && (
+            <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 0 4px", borderBottom: `1px solid ${theme.light}` }}>Past</div>
+          )}
+          {past.slice(-5).reverse().map((ev, i) => (
+            <div key={`p${i}`} style={{ padding: "5px 0 5px 8px", borderBottom: `1px solid ${theme.light}`, opacity: 0.5 }}>
+              <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, lineHeight: 1.3 }}>{ev.summary}</div>
+              <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{formatDate(ev.start)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ─── HOME FEED (Google News Top Stories) ─── */
+function HomeFeed() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const rssUrl = HOME_FEED[0].rss;
+
+    async function fetchNews() {
+      // Try rss2json first (most reliable for Google News)
+      try {
+        const r = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`);
+        const d = await r.json();
+        if (!cancelled && d.status === "ok" && d.items?.length > 0) {
+          setItems(d.items.slice(0, 25).map((item) => ({
+            title: item.title || "", link: item.link || "", pubDate: item.pubDate || "",
+            description: (item.description || "").replace(/<[^>]*>/g, "").slice(0, 140),
+          })));
+          setLoading(false);
+          return;
+        }
+      } catch {}
+      // Fallback: allorigins
+      try {
+        const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`);
+        const json = await r.json();
+        if (!cancelled && json.contents) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(json.contents, "text/xml");
+          const entries = [...doc.querySelectorAll("item")];
+          if (entries.length > 0) {
+            setItems(entries.slice(0, 25).map((item) => ({
+              title: item.querySelector("title")?.textContent?.trim() || "",
+              link: item.querySelector("link")?.textContent?.trim() || "",
+              pubDate: item.querySelector("pubDate")?.textContent?.trim() || "",
+              description: (item.querySelector("description")?.textContent || "").replace(/<[^>]*>/g, "").slice(0, 140),
+            })));
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+      // Fallback: corsproxy
+      try {
+        const r = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(rssUrl)}`);
+        const xml = await r.text();
+        if (!cancelled) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(xml, "text/xml");
+          const entries = [...doc.querySelectorAll("item")];
+          if (entries.length > 0) {
+            setItems(entries.slice(0, 25).map((item) => ({
+              title: item.querySelector("title")?.textContent?.trim() || "",
+              link: item.querySelector("link")?.textContent?.trim() || "",
+              pubDate: item.querySelector("pubDate")?.textContent?.trim() || "",
+              description: (item.querySelector("description")?.textContent || "").replace(/<[^>]*>/g, "").slice(0, 140),
+            })));
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+      if (!cancelled) setLoading(false);
+    }
+
+    fetchNews();
+    const interval = setInterval(fetchNews, 10 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, overflow: "hidden" }}>
+      <div style={{ background: theme.paper, border: `1px solid ${theme.border}`, minHeight: 200, maxHeight: 600, overflowY: "auto" }}>
+        {loading && items.length === 0 ? (
+          <div style={{ padding: 20, textAlign: "center" }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic" }}>Fetching headlines...</div>
+          </div>
+        ) : items.length === 0 ? (
+          <div style={{ padding: 20, textAlign: "center", fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic" }}>
+            Could not load feed — try refreshing.
+          </div>
+        ) : (
+          items.map((item, i) => (
+            <a
+              key={i}
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "block", padding: "10px 14px",
+                borderBottom: i < items.length - 1 ? `1px solid ${theme.light}` : "none",
+                textDecoration: "none", transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <div style={{
+                fontFamily: base.fontBody, fontSize: 13, fontWeight: 400,
+                color: theme.text, lineHeight: 1.35, marginBottom: 3,
+                wordBreak: "break-word",
+              }}>
+                {item.title}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {item.description && (
+                  <div style={{
+                    fontFamily: base.fontSans, fontSize: 11, color: theme.muted,
+                    lineHeight: 1.3, flex: 1, marginRight: 8,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {item.description}
+                  </div>
+                )}
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {timeAgo(item.pubDate)}
+                </div>
+              </div>
+            </a>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── FRONT PAGE ─── */
+function FrontPage({ sessions, setPage, writedowns, setWritedowns, wisdom, setWisdom }) {
+  const [writeInput, setWriteInput] = useState("");
+  const [forLife, setForLife] = useState(false);
+  const [lifeEnergy, setLifeEnergy] = useState(null);
+
+  const submitWrite = () => {
+    if (!writeInput.trim()) return;
+    if (forLife) {
+      if (!lifeEnergy) return;
+      setWisdom((prev) => [{ id: Date.now(), text: writeInput.trim(), energy: lifeEnergy, date: new Date().toISOString() }, ...prev]);
+    } else {
+      setWritedowns((prev) => [{ id: Date.now(), text: writeInput.trim(), date: new Date().toISOString() }, ...prev]);
+    }
+    setWriteInput("");
+    setForLife(false);
+    setLifeEnergy(null);
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 4fr) minmax(0, 2.5fr)", gap: 16, padding: 20, alignItems: "start" }}>
+      {/* ── LEFT COLUMN ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+        {/* Write it down */}
+        <Card accent>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 10px", paddingBottom: 8, borderBottom: `1px solid ${theme.light}` }}>
+            <h3 style={{
+              fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+              textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson, margin: 0,
+            }}>
+              Write it down
+            </h3>
+            <button
+              onClick={() => { setForLife(!forLife); if (forLife) setLifeEnergy(null); }}
+              style={{
+                fontFamily: base.fontSans, fontSize: 10, fontWeight: forLife ? 600 : 400,
+                padding: "3px 10px", cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                border: `1px solid ${forLife ? "#9B8EC4" : theme.border}`,
+                background: forLife ? "#9B8EC4" : "transparent",
+                color: forLife ? theme.paper : theme.muted,
+                borderRadius: 2,
+              }}
+            >
+              For Life
+            </button>
+          </div>
+
+          {/* Energy tag selector when For Life is active */}
+          {forLife && (
+            <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginRight: 4 }}>Tag:</span>
+              {ENERGY_LEVELS.map((lvl) => (
+                <button key={lvl.value} onClick={() => setLifeEnergy(lvl.value)} style={{
+                  fontFamily: base.fontSans, fontSize: 10, padding: "4px 10px", cursor: "pointer",
+                  border: lifeEnergy === lvl.value ? `2px solid ${lvl.color}` : `1px solid ${theme.border}`,
+                  background: lifeEnergy === lvl.value ? lvl.color : "transparent",
+                  color: lifeEnergy === lvl.value ? theme.paper : theme.text,
+                  borderRadius: 2, textTransform: "capitalize",
+                }}>
+                  {lvl.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={writeInput}
+              onChange={(e) => setWriteInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submitWrite(); }}
+              placeholder={forLife ? "A word of wisdom..." : "Quick thought, idea, reminder..."}
+              style={{
+                flex: 1, fontFamily: base.fontBody, fontSize: 14,
+                padding: "9px 12px", border: `1px solid ${forLife ? "#9B8EC4" : theme.border}`,
+                background: theme.salmon, color: theme.text, outline: "none",
+              }}
+            />
+            <button
+              onClick={submitWrite}
+              style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                padding: "8px 16px", border: "none",
+                background: forLife ? "#9B8EC4" : theme.dark, color: theme.paper,
+                cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                opacity: (writeInput.trim() && (!forLife || lifeEnergy)) ? 1 : 0.4,
+              }}
+            >
+              {forLife ? "Save" : "Jot"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            {writedowns.length > 0 && (
+              <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+                {writedowns.length} note{writedowns.length !== 1 ? "s" : ""} · <span
+                  style={{ color: theme.teal, cursor: "pointer", textDecoration: "underline" }}
+                  onClick={() => setPage("Journal")}
+                >journal</span>
+              </span>
+            )}
+            {wisdom.length > 0 && (
+              <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+                {wisdom.length} wisdom · <span
+                  style={{ color: "#9B8EC4", cursor: "pointer", textDecoration: "underline" }}
+                  onClick={() => setPage("Life")}
+                >life</span>
+              </span>
+            )}
+          </div>
+        </Card>
+
+
+        {/* Weather */}
+        <Card title="Weather — Cambridge">
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <span style={{ fontSize: 36 }}>{WEATHER.current.icon}</span>
+            <div>
+              <div style={{ fontFamily: base.fontSerif, fontSize: 28, fontWeight: 700, color: theme.dark }}>{WEATHER.current.temp}°C</div>
+              <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted }}>{WEATHER.current.condition}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${theme.light}`, paddingTop: 8 }}>
+            {WEATHER.forecast.map((d) => (
+              <div key={d.day} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, fontWeight: 600, textTransform: "uppercase" }}>{d.day}</div>
+                <div style={{ fontSize: 16, margin: "3px 0" }}>{d.icon}</div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 12, fontWeight: 500, color: theme.dark }}>{d.high}°</div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal }}>{d.rain}%</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Calendar */}
+        <CalendarBox />
+
+      </div>
+      <div style={{ minHeight: 300, minWidth: 0, overflow: "hidden" }}>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+            textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson,
+          }}>
+            Headlines
+          </span>
+        </div>
+        <HomeFeed />
+      </div>
+
+      {/* ── RIGHT COLUMN: Websites ── */}
+      <WebsitesPanel />
+    </div>
+  );
+}
+
+/* ─── STUDY PAGE ─── */
+const SUBJECTS = [
+  { id: "RE01", label: "RE01", color: "#4A6FA5" },
+  { id: "RE02", label: "RE02", color: "#C9A227" },
+  { id: "RE03", label: "RE03", color: "#A84032" },
+  { id: "RE05", label: "RE05", color: "#C77DAF" },
+  { id: "DISS", label: "Dissertation", color: "#9B8EC4" },
+];
+
+function subjectColor(id) {
+  return SUBJECTS.find((s) => s.id === id)?.color || theme.muted;
+}
+function subjectLabel(id) {
+  return SUBJECTS.find((s) => s.id === id)?.label || id;
+}
+
+/* ─── Study Performance Graph ─── */
+function StudyPerformance({ sessions, checks }) {
+  const [chartType, setChartType] = useState("line");
+  const [range, setRange] = useState("week"); // week | month | quarter
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10);
+
+  const dayCount = range === "week" ? 7 : range === "month" ? 30 : 120;
+  const days = [...Array(dayCount)].map((_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (dayCount - 1 - i));
+    const key = d.toISOString().slice(0, 10);
+    const daySessions = sessions.filter((s) => s.date === key);
+    const bySubject = {};
+    SUBJECTS.forEach((sub) => {
+      bySubject[sub.id] = daySessions.filter((s) => s.subject === sub.id).reduce((a, s) => a + s.minutes, 0);
+    });
+    const total = daySessions.reduce((a, s) => a + s.minutes, 0);
+    return {
+      key,
+      label: range === "week"
+        ? d.toLocaleDateString("en-GB", { weekday: "short" })
+        : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      bySubject,
+      total,
+      isToday: key === todayKey,
+    };
+  });
+
+  // Adaptive Y axis — use actual max, with a small padding, minimum 10
+  const rawMax = Math.max(...days.map((d) => d.total));
+  const maxTotal = rawMax > 0 ? Math.ceil(rawMax * 1.15) : 10;
+
+  // SVG dimensions
+  const W = 420, H = 200, PAD = { top: 16, right: 16, bottom: 28, left: 34 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const barW = plotW / days.length;
+
+  const xPos = (i) => PAD.left + i * barW + barW / 2;
+  const yPos = (v) => PAD.top + plotH - (v / maxTotal) * plotH;
+
+  // Grid lines
+  const gridSteps = 4;
+  const gridLines = [...Array(gridSteps + 1)].map((_, i) => {
+    const v = (maxTotal / gridSteps) * i;
+    return { y: yPos(v), label: Math.round(v) + "m" };
+  });
+
+  // Subject totals for the period
+  const periodTotals = {};
+  SUBJECTS.forEach((sub) => {
+    periodTotals[sub.id] = days.reduce((a, d) => a + d.bySubject[sub.id], 0);
+  });
+  const grandTotal = days.reduce((a, d) => a + d.total, 0);
+
+  return (
+    <Card title="Performance" style={{ height: "100%", boxSizing: "border-box" }}>
+      {/* Chart type + range selectors */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", gap: 3 }}>
+          {[{ key: "line", label: "Line" }, { key: "bar", label: "Bar" }].map((t) => (
+            <button key={t.key} onClick={() => setChartType(t.key)} style={{
+              fontFamily: base.fontSans, fontSize: 10, fontWeight: chartType === t.key ? 600 : 400,
+              padding: "4px 12px", cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3,
+              border: `1px solid ${chartType === t.key ? theme.dark : theme.border}`,
+              background: chartType === t.key ? theme.dark : "transparent",
+              color: chartType === t.key ? theme.paper : theme.muted,
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 3 }}>
+          {[{ key: "week", label: "7 Days" }, { key: "month", label: "30 Days" }, { key: "quarter", label: "4 Months" }].map((t) => (
+            <button key={t.key} onClick={() => setRange(t.key)} style={{
+              fontFamily: base.fontSans, fontSize: 10, fontWeight: range === t.key ? 600 : 400,
+              padding: "4px 12px", cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3,
+              border: `1px solid ${range === t.key ? theme.dark : theme.border}`,
+              background: range === t.key ? theme.dark : "transparent",
+              color: range === t.key ? theme.paper : theme.muted,
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chart SVG */}
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        {/* Grid */}
+        {gridLines.map((g, i) => (
+          <g key={i}>
+            <line x1={PAD.left} y1={g.y} x2={W - PAD.right} y2={g.y} stroke={theme.light} strokeWidth={1} />
+            <text x={PAD.left - 6} y={g.y + 3} textAnchor="end"
+              style={{ fontSize: 8, fontFamily: base.fontSans, fill: theme.muted }}>{g.label}</text>
+          </g>
+        ))}
+
+        {chartType === "bar" ? (
+          /* ── Stacked Bar Chart ── */
+          days.map((d, i) => {
+            let cumY = yPos(0);
+            return (
+              <g key={d.key}>
+                {SUBJECTS.map((sub) => {
+                  const val = d.bySubject[sub.id];
+                  if (val === 0) return null;
+                  const h = (val / maxTotal) * plotH;
+                  const y = cumY - h;
+                  cumY = y;
+                  return (
+                    <rect key={sub.id} x={xPos(i) - barW * 0.35} y={y} width={barW * 0.7} height={h}
+                      fill={sub.color} opacity={d.isToday ? 1 : 0.7} rx={1}>
+                      <title>{sub.label}: {val}m</title>
+                    </rect>
+                  );
+                })}
+                {/* X label */}
+                {(range === "week" || i % Math.ceil(dayCount / 8) === 0 || i === dayCount - 1) && (
+                  <text x={xPos(i)} y={H - 6} textAnchor="middle"
+                    style={{ fontSize: range === "week" ? 9 : range === "month" ? 7 : 6, fontFamily: base.fontSans, fill: d.isToday ? theme.dark : theme.muted, fontWeight: d.isToday ? 600 : 400 }}>
+                    {d.label}
+                  </text>
+                )}
+              </g>
+            );
+          })
+        ) : (
+          /* ── Line Chart (one line per subject) ── */
+          SUBJECTS.map((sub) => {
+            const points = days.map((d, i) => ({ x: xPos(i), y: yPos(d.bySubject[sub.id]), val: d.bySubject[sub.id] }));
+            const nonZero = points.filter((p) => p.val > 0);
+            if (nonZero.length === 0) return null;
+            const path = nonZero.map((p, j) => `${j === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+            return (
+              <g key={sub.id}>
+                <path d={path} fill="none" stroke={sub.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.8} />
+                {nonZero.map((p, j) => (
+                  <circle key={j} cx={p.x} cy={p.y} r={3} fill={sub.color} stroke={theme.paper} strokeWidth={1.5}>
+                    <title>{sub.label}: {p.val}m</title>
+                  </circle>
+                ))}
+              </g>
+            );
+          })
+        )}
+
+        {/* X labels for line chart */}
+        {chartType === "line" && days.map((d, i) => (
+          (range === "week" || i % Math.ceil(dayCount / 8) === 0 || i === dayCount - 1) ? (
+            <text key={d.key} x={xPos(i)} y={H - 6} textAnchor="middle"
+              style={{ fontSize: range === "week" ? 9 : range === "month" ? 7 : 6, fontFamily: base.fontSans, fill: d.isToday ? theme.dark : theme.muted, fontWeight: d.isToday ? 600 : 400 }}>
+              {d.label}
+            </text>
+          ) : null
+        ))}
+      </svg>
+
+      {/* Subject legend + totals */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.light}` }}>
+        {SUBJECTS.map((sub) => (
+          <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: sub.color, display: "inline-block" }} />
+            <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.text }}>{sub.label}</span>
+            <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>
+              {Math.floor(periodTotals[sub.id] / 60)}h{periodTotals[sub.id] % 60}m
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, marginTop: 6 }}>
+        Total: {Math.floor(grandTotal / 60)}h {grandTotal % 60}m over {range === "week" ? "7" : range === "month" ? "30" : "120"} days
+      </div>
+
+      {/* ── Progress (checkoff completion) ── */}
+      {checks && (() => {
+        const data = CHECKOFF_SUBJECTS.map((sub) => {
+          const { cols, rows } = getCheckoffConfig(sub.id);
+          const total = cols.length * rows.length;
+          let done = 0;
+          rows.forEach((r) => cols.forEach((c) => {
+            if (checks[`${sub.id}:${r}:${c}`]) done++;
+          }));
+          return { ...sub, total, done, pct: total > 0 ? (done / total) * 100 : 0 };
+        });
+        const overallPct = Math.round(data.reduce((a, d) => a + d.done, 0) / Math.max(1, data.reduce((a, d) => a + d.total, 0)) * 100);
+        return (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${theme.light}` }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+              Progress — {overallPct}%
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {data.map((d) => (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: base.fontSans, fontSize: 9, fontWeight: 600, color: d.color, width: 32, flexShrink: 0 }}>{d.label}</span>
+                  <div style={{
+                    flex: 1, height: 12, background: theme.light, borderRadius: 2,
+                    position: "relative", overflow: "hidden", border: `1px solid ${theme.border}`,
+                  }}>
+                    <div style={{
+                      position: "absolute", top: 0, left: 0, bottom: 0,
+                      width: `${d.pct}%`, background: d.color,
+                      borderRadius: "1px 0 0 1px", transition: "width 0.4s ease",
+                      opacity: 0.85,
+                    }} />
+                  </div>
+                  <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted, width: 32, flexShrink: 0, textAlign: "right" }}>{d.done}/{d.total}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </Card>
+  );
+}
+
+/* ─── Study Progress (checkoff bars) ─── */
+function StudyProgress({ checks }) {
+  const data = CHECKOFF_SUBJECTS.map((sub) => {
+    const { cols, rows } = getCheckoffConfig(sub.id);
+    const total = cols.length * rows.length;
+    let done = 0;
+    rows.forEach((r) => cols.forEach((c) => {
+      if (checks[`${sub.id}:${r}:${c}`]) done++;
+    }));
+    return { ...sub, total, done, pct: total > 0 ? (done / total) * 100 : 0 };
+  });
+
+  const barH = 120;
+
+  return (
+    <Card title="Progress" style={{ minWidth: 140 }}>
+      <div style={{ display: "flex", justifyContent: "space-around", alignItems: "flex-end", height: barH + 26, paddingTop: 6 }}>
+        {data.map((d) => (
+          <div key={d.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, textAlign: "center" }}>
+              {d.done}/{d.total}
+            </div>
+            <div style={{
+              width: 24, height: barH, background: theme.light, borderRadius: 3,
+              position: "relative", overflow: "hidden",
+              border: `1px solid ${theme.border}`,
+            }}>
+              {/* Filled portion from bottom */}
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, right: 0,
+                height: `${d.pct}%`, background: d.color,
+                borderRadius: "0 0 2px 2px", transition: "height 0.4s ease",
+                opacity: 0.85,
+              }} />
+            </div>
+            {/* Label */}
+            <div style={{
+              fontFamily: base.fontSans, fontSize: 9, fontWeight: 600,
+              color: d.color, textTransform: "uppercase", letterSpacing: 0.3,
+            }}>
+              {d.label}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Overall % */}
+      <div style={{
+        fontFamily: base.fontSans, fontSize: 11, color: theme.muted, textAlign: "center",
+        marginTop: 10, paddingTop: 8, borderTop: `1px solid ${theme.light}`,
+      }}>
+        {Math.round(data.reduce((a, d) => a + d.done, 0) / Math.max(1, data.reduce((a, d) => a + d.total, 0)) * 100)}% overall
+      </div>
+    </Card>
+  );
+}
+
+/* ─── Study Heatmap ─── */
+function StudyHeatmap({ sessions }) {
+  // Hours from 4am (4) to 3am next day (27), displayed as 4,5,...,23,0,1,2,3
+  const hours = [];
+  for (let i = 4; i < 28; i++) hours.push(i % 24);
+
+  // For each session, compute which hour(s) it occupies
+  // time is "HH:MM" (end time), minutes is duration
+  const hourTotals = {};
+  hours.forEach((h) => { hourTotals[h] = { total: 0, days: new Set() }; });
+
+  sessions.forEach((s) => {
+    if (!s.time || !s.minutes) return;
+    const [endH, endM] = s.time.split(":").map(Number);
+    const endMins = endH * 60 + endM;
+    const startMins = endMins - s.minutes;
+    // Distribute minutes across hours
+    for (let m = startMins; m < endMins; m++) {
+      let hour = Math.floor(((m % 1440) + 1440) % 1440 / 60);
+      if (hourTotals[hour] !== undefined) {
+        hourTotals[hour].total += 1; // 1 minute
+        hourTotals[hour].days.add(s.date);
+      }
+    }
+  });
+
+  // Get all unique days that have any session
+  const allDays = new Set(sessions.map((s) => s.date));
+  const dayCount = Math.max(allDays.size, 1);
+
+  // Compute average minutes per hour
+  const hourAvgs = hours.map((h) => ({
+    hour: h,
+    avg: hourTotals[h].total / dayCount,
+  }));
+
+  const maxAvg = Math.max(...hourAvgs.map((h) => h.avg), 1);
+
+  const formatHour = (h) => {
+    if (h === 0) return "12am";
+    if (h < 12) return `${h}am`;
+    if (h === 12) return "12pm";
+    return `${h - 12}pm`;
+  };
+
+  return (
+    <Card title="Heatmap" style={{ minWidth: 56, padding: "14px 10px", display: "flex", flexDirection: "column", flex: 1, width: "100%", height: "100%", boxSizing: "border-box" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, flex: 1 }}>
+        {hourAvgs.map(({ hour, avg }) => {
+          const intensity = avg / maxAvg;
+          const r = Math.round(91 + (139 - 91) * (1 - intensity));
+          const g = Math.round(58 + (179 - 58) * (1 - intensity));
+          const b = Math.round(50 + (154 - 50) * (1 - intensity));
+          const bg = avg > 0 ? `rgb(${r}, ${g}, ${b})` : theme.light;
+          return (
+            <div key={hour} style={{ display: "flex", alignItems: "stretch", flex: 1, gap: 3 }}>
+              <span style={{
+                fontFamily: base.fontSans, fontSize: 7, color: theme.muted,
+                width: 14, textAlign: "right", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end",
+              }}>
+                {String(hour).padStart(2, "0")}
+              </span>
+              <div
+                style={{
+                  flex: 1, background: bg, borderRadius: 1,
+                  minHeight: 0, margin: "0.5px 0",
+                }}
+                title={`${formatHour(hour)}: ${Math.round(avg)} min avg`}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontFamily: base.fontSans, fontSize: 7, color: theme.muted, marginTop: 4, textAlign: "center" }}>
+        {dayCount}d avg
+      </div>
+    </Card>
+  );
+}
+
+/* ─── Study Check-off ─── */
+const CHECKOFF_SUBJECTS = [
+  { id: "RE01", label: "RE01", color: "#4A6FA5" },
+  { id: "RE02", label: "RE02", color: "#C9A227" },
+  { id: "RE03", label: "RE03", color: "#A84032" },
+  { id: "RE05", label: "RE05", color: "#C77DAF" },
+];
+
+function getCheckoffConfig(subId) {
+  const baseCols = ["LT1", "LT2", "LT3", "LT4", "LT5", "LT6", "LT8"];
+  const baseRows = ["Overview", "Lecture", "Readings", "Recall"];
+  let cols = [...baseCols];
+  let rows = [...baseRows];
+  if (subId === "RE01" || subId === "RE02") cols = [...baseCols, "S1", "S2"];
+  if (subId === "RE03") rows = ["Overview", "LA", "LB", "LC", "Lecture", "Readings", "Recall"];
+  return { cols, rows };
+}
+
+function StudyCheckoff({ checks, setChecks }) {
+  const [tab, setTab] = useState("RE01");
+
+  const { cols, rows } = getCheckoffConfig(tab);
+  const sub = CHECKOFF_SUBJECTS.find((s) => s.id === tab);
+
+  const toggleCheck = (row, col) => {
+    const key = `${tab}:${row}:${col}`;
+    setChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const isChecked = (row, col) => !!checks[`${tab}:${row}:${col}`];
+
+  // Progress
+  const total = cols.length * rows.length;
+  const done = rows.reduce((a, r) => a + cols.reduce((b, c) => b + (isChecked(r, c) ? 1 : 0), 0), 0);
+
+  return (
+    <Card title="Check-off">
+      {/* Subject tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
+        {CHECKOFF_SUBJECTS.map((s) => (
+          <button key={s.id} onClick={() => setTab(s.id)} style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: tab === s.id ? 600 : 400,
+            padding: "6px 14px", cursor: "pointer",
+            border: tab === s.id ? `2px solid ${s.color}` : `1px solid ${theme.border}`,
+            background: tab === s.id ? s.color : "transparent",
+            color: tab === s.id ? theme.paper : theme.text,
+            borderRadius: 2, textTransform: "uppercase", letterSpacing: 0.5,
+          }}>
+            {s.label}
+          </button>
+        ))}
+        <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, marginLeft: "auto", alignSelf: "center" }}>
+          {done}/{total}
+        </span>
+      </div>
+
+      {/* Grid */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: base.fontSans, fontSize: 11 }}>
+          <thead>
+            <tr>
+              <th style={{
+                textAlign: "left", padding: "6px 10px", borderBottom: `2px solid ${sub.color}`,
+                color: theme.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5,
+                position: "sticky", left: 0, background: theme.paper, minWidth: 70,
+              }} />
+              {cols.map((col) => (
+                <th key={col} style={{
+                  textAlign: "center", padding: "6px 6px", borderBottom: `2px solid ${sub.color}`,
+                  color: theme.dark, fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.3,
+                  minWidth: 38,
+                }}>
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={row} style={{ background: ri % 2 === 0 ? "transparent" : theme.salmon }}>
+                <td style={{
+                  padding: "7px 10px", fontWeight: 500, color: theme.text, fontSize: 11,
+                  borderBottom: `1px solid ${theme.light}`,
+                  position: "sticky", left: 0, background: ri % 2 === 0 ? theme.paper : theme.salmon,
+                  textTransform: "capitalize",
+                }}>
+                  {row}
+                </td>
+                {cols.map((col) => (
+                  <td key={col} style={{
+                    textAlign: "center", padding: "5px 4px",
+                    borderBottom: `1px solid ${theme.light}`,
+                  }}>
+                    <button
+                      onClick={() => toggleCheck(row, col)}
+                      style={{
+                        width: 22, height: 22, borderRadius: 3, cursor: "pointer",
+                        border: isChecked(row, col) ? `2px solid ${sub.color}` : `1.5px solid ${theme.border}`,
+                        background: isChecked(row, col) ? sub.color : "transparent",
+                        color: theme.paper, fontSize: 12, fontWeight: 700,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        margin: "0 auto", transition: "all 0.1s",
+                      }}
+                    >
+                      {isChecked(row, col) ? "✓" : ""}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function StudyPage({ sessions, setSessions }) {
+  const [timerMode, setTimerMode] = useState("pomodoro");
+  const [studyDur, setStudyDur] = useState(25);
+  const [breakDur, setBreakDur] = useState(5);
+  const [phase, setPhase] = useState("idle");
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [studiedSecs, setStudiedSecs] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const [checks, setChecks] = usePersistedState("daily-brief:checkoff", {});
+  const [swRunning, setSwRunning] = useState(false);
+  const [subject, setSubject] = useState(null);
+  const [customMin, setCustomMin] = useState("");
+  const timerRef = useRef(null);
+  const stateRef = useRef({ phase, timeLeft, studiedSecs: 0, elapsed, swRunning });
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  const STUDY_OPTS = [5, 15, 25, 45];
+  const BREAK_OPTS = [5, 10, 20];
+
+  // Keep ref in sync
+  useEffect(() => {
+    stateRef.current = { ...stateRef.current, phase, timeLeft, elapsed, swRunning };
+  });
+
+  // Single tick function
+  const logSession = useCallback((secs) => {
+    if (!subject || secs < 1) return;
+    const mins = Math.max(1, Math.round(secs / 60));
+    setSessions((prev) => [...prev, {
+      id: Date.now(), date: new Date().toISOString().slice(0, 10),
+      minutes: mins, subject,
+      time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+    }]);
+  }, [subject, setSessions]);
+
+  // Master tick
+  useEffect(() => {
+    clearInterval(timerRef.current);
+
+    const shouldTick =
+      (timerMode === "pomodoro" && (phase === "studying" || phase === "breaking")) ||
+      (timerMode === "stopwatch" && swRunning);
+
+    if (!shouldTick) return;
+
+    timerRef.current = setInterval(() => {
+      const s = stateRef.current;
+
+      if (timerMode === "pomodoro") {
+        if (s.timeLeft <= 1) {
+          // Timer finished
+          if (s.phase === "studying") {
+            const studied = s.studiedSecs + 1;
+            logSession(studied);
+            stateRef.current.studiedSecs = 0;
+            setStudiedSecs(0);
+            setPhase("breaking");
+            setTimeLeft(breakDur * 60);
+          } else if (s.phase === "breaking") {
+            setPhase("prompt");
+            setTimeLeft(0);
+          }
+        } else {
+          const newTime = s.timeLeft - 1;
+          setTimeLeft(newTime);
+          if (s.phase === "studying") {
+            stateRef.current.studiedSecs += 1;
+            setStudiedSecs(stateRef.current.studiedSecs);
+          }
+        }
+      } else if (timerMode === "stopwatch") {
+        setElapsed((e) => e + 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [phase, timerMode, swRunning, breakDur, logSession]);
+
+  // Actions
+  const switchTimerMode = (m) => {
+    if (phase !== "idle" && phase !== "prompt") return;
+    if (swRunning) return;
+    setTimerMode(m); setPhase("idle"); setTimeLeft(studyDur * 60); setElapsed(0);
+    stateRef.current.studiedSecs = 0; setStudiedSecs(0);
+  };
+  const startPomodoro = () => {
+    if (!subject) return;
+    stateRef.current.studiedSecs = 0; setStudiedSecs(0);
+    setTimeLeft(studyDur * 60); setPhase("studying");
+  };
+  const pausePomodoro = () => setPhase((p) => p === "studying" ? "paused_study" : p === "breaking" ? "paused_break" : p);
+  const resumePomodoro = () => setPhase((p) => p === "paused_study" ? "studying" : p === "paused_break" ? "breaking" : p);
+  const stopAndLog = () => {
+    logSession(stateRef.current.studiedSecs);
+    stateRef.current.studiedSecs = 0; setStudiedSecs(0);
+    setPhase("idle"); setTimeLeft(studyDur * 60);
+  };
+  const endBreakEarly = () => setPhase("prompt");
+  const startNextCycle = () => {
+    stateRef.current.studiedSecs = 0; setStudiedSecs(0);
+    setTimeLeft(studyDur * 60); setPhase("studying");
+  };
+  const finishSession = () => {
+    stateRef.current.studiedSecs = 0; setStudiedSecs(0);
+    setPhase("idle"); setTimeLeft(studyDur * 60);
+  };
+  const logStopwatch = () => {
+    if (elapsed < 1 || !subject) return;
+    logSession(elapsed);
+    setSwRunning(false); setElapsed(0);
+  };
+  const setCustom = () => {
+    const m = parseInt(customMin);
+    if (m > 0 && m <= 120) { setStudyDur(m); setTimeLeft(m * 60); setCustomMin(""); }
+  };
+
+  const isActive = phase === "studying" || phase === "breaking";
+  const isPaused = phase === "paused_study" || phase === "paused_break";
+  const isStudying = phase === "studying" || phase === "paused_study";
+  const isBreaking = phase === "breaking" || phase === "paused_break";
+  const locked = phase !== "idle" && phase !== "prompt";
+
+  const displaySecs = timerMode === "pomodoro" ? timeLeft : elapsed;
+  const displayMins = Math.floor(displaySecs / 60);
+  const displaySecsRem = displaySecs % 60;
+  const displayHrs = Math.floor(displayMins / 60);
+  const showHrs = displayHrs > 0;
+  const totalDur = isBreaking ? breakDur * 60 : studyDur * 60;
+  const circumference = 2 * Math.PI * 78;
+  const progress = timerMode === "pomodoro" ? ((phase === "idle" || phase === "prompt") ? 0 : 1 - timeLeft / totalDur) : (elapsed % (25 * 60)) / (25 * 60);
+  const activeColor = isBreaking ? theme.teal : (subject ? subjectColor(subject) : theme.teal);
+
+  return (
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "2fr 2fr 1fr", gap: 16, alignItems: "start" }}>
+      <Card accent style={{ gridRow: "1 / 3" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          {/* Mode toggle */}
+          <div style={{ display: "flex", width: "100%", borderBottom: `1px solid ${theme.light}`, paddingBottom: 10 }}>
+            {[{ key: "pomodoro", label: "Pomodoro" }, { key: "stopwatch", label: "Stopwatch" }].map((t) => (
+              <button key={t.key} onClick={() => switchTimerMode(t.key)} style={{
+                flex: 1, fontFamily: base.fontSans, fontSize: 12, fontWeight: timerMode === t.key ? 600 : 400,
+                padding: "8px 12px", cursor: locked ? "default" : "pointer",
+                border: "none", borderBottom: timerMode === t.key ? `3px solid ${theme.crimson}` : "3px solid transparent",
+                background: "transparent", color: timerMode === t.key ? theme.dark : theme.muted,
+                textTransform: "uppercase", letterSpacing: 0.5, opacity: locked && timerMode !== t.key ? 0.4 : 1,
+              }}>{t.label}</button>
+            ))}
+          </div>
+
+          {/* Subject */}
+          <div style={{ width: "100%" }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Subject <span style={{ color: theme.crimson }}>*</span></div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {SUBJECTS.map((sub) => (
+                <button key={sub.id} onClick={() => { if (!locked) setSubject(sub.id); }} style={{
+                  fontFamily: base.fontSans, fontSize: 11, fontWeight: subject === sub.id ? 600 : 400,
+                  padding: "5px 12px", cursor: locked ? "default" : "pointer",
+                  border: subject === sub.id ? `2px solid ${sub.color}` : `1px solid ${theme.border}`,
+                  background: subject === sub.id ? sub.color : "transparent",
+                  color: subject === sub.id ? theme.paper : theme.text,
+                  borderRadius: 2, opacity: locked && subject !== sub.id ? 0.3 : 1,
+                }}>{sub.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Timer ring */}
+          <div style={{ position: "relative", width: 160, height: 160 }}>
+            <svg width="160" height="160" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r="65" fill="none" stroke={theme.wheat} strokeWidth="5" />
+              <circle cx="80" cy="80" r="65" fill="none" stroke={activeColor} strokeWidth="5"
+                strokeDasharray={2 * Math.PI * 65} strokeDashoffset={(2 * Math.PI * 65) * (1 - progress)}
+                strokeLinecap="round" transform="rotate(-90 80 80)" style={{ transition: "stroke-dashoffset 0.5s" }} />
+            </svg>
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }}>
+              <div style={{ fontFamily: base.fontSerif, fontSize: showHrs ? 26 : 32, fontWeight: 700, color: theme.dark, lineHeight: 1 }}>
+                {showHrs && `${String(displayHrs).padStart(2, "0")}:`}{String(showHrs ? displayMins % 60 : displayMins).padStart(2, "0")}:{String(displaySecsRem).padStart(2, "0")}
+              </div>
+              <div style={{ fontFamily: base.fontSans, fontSize: 10, color: isBreaking ? theme.teal : (subject ? subjectColor(subject) : theme.muted), textTransform: "uppercase", letterSpacing: 1, marginTop: 4, fontWeight: 600 }}>
+                {timerMode === "stopwatch" ? (subject ? subjectLabel(subject) : "Stopwatch")
+                  : phase === "prompt" ? "Done!" : isBreaking ? "Break" : isPaused ? "Paused"
+                  : isActive ? (subject ? subjectLabel(subject) : "Focus") : "Ready"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Pomodoro Controls ── */}
+          {timerMode === "pomodoro" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", alignItems: "center" }}>
+              {phase === "prompt" && (
+                <div style={{ textAlign: "center", padding: "8px 0" }}>
+                  <div style={{ fontFamily: base.fontSerif, fontSize: 16, fontWeight: 600, color: theme.dark, marginBottom: 12 }}>Break’s over — keep going?</div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                    <button onClick={startNextCycle} style={{ fontFamily: base.fontSans, fontSize: 12, fontWeight: 600, padding: "10px 22px", border: "none", background: activeColor, color: theme.paper, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5 }}>Next Session</button>
+                    <button onClick={finishSession} style={{ fontFamily: base.fontSans, fontSize: 12, fontWeight: 500, padding: "10px 22px", border: `1px solid ${theme.border}`, background: "transparent", color: theme.text, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5 }}>Finish</button>
+                  </div>
+                </div>
+              )}
+              {phase === "idle" && (
+                <>
+                  <div style={{ width: "100%" }}>
+                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Study</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {STUDY_OPTS.map((m) => (
+                        <button key={m} onClick={() => { setStudyDur(m); setTimeLeft(m * 60); }} style={{
+                          fontFamily: base.fontSans, fontSize: 11, fontWeight: studyDur === m ? 600 : 400,
+                          padding: "6px 14px", border: `1px solid ${studyDur === m ? theme.dark : theme.border}`,
+                          background: studyDur === m ? theme.dark : "transparent", color: studyDur === m ? theme.paper : theme.text,
+                          cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                        }}>{m} min</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ width: "100%" }}>
+                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 5 }}>Break</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {BREAK_OPTS.map((m) => (
+                        <button key={m} onClick={() => setBreakDur(m)} style={{
+                          fontFamily: base.fontSans, fontSize: 11, fontWeight: breakDur === m ? 600 : 400,
+                          padding: "6px 14px", border: `1px solid ${breakDur === m ? theme.teal : theme.border}`,
+                          background: breakDur === m ? theme.teal : "transparent", color: breakDur === m ? theme.paper : theme.text,
+                          cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                        }}>{m} min</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="number" placeholder="Custom study" value={customMin} onChange={(e) => setCustomMin(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setCustom()}
+                      style={{ fontFamily: base.fontSans, fontSize: 12, padding: "6px 10px", width: 110, border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none" }} />
+                    <button onClick={setCustom} style={{ fontFamily: base.fontSans, fontSize: 11, padding: "6px 10px", border: `1px solid ${theme.border}`, background: "transparent", cursor: "pointer", color: theme.text }}>Set</button>
+                  </div>
+                  <button onClick={startPomodoro} style={{
+                    fontFamily: base.fontSans, fontSize: 13, fontWeight: 600, padding: "10px 32px", border: "none",
+                    cursor: !subject ? "not-allowed" : "pointer", background: !subject ? theme.border : activeColor,
+                    color: theme.paper, letterSpacing: 1, textTransform: "uppercase",
+                  }}>Start</button>
+                  {!subject && <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.crimson, fontStyle: "italic" }}>Select a subject to start</div>}
+                </>
+              )}
+              {(isActive || isPaused) && phase !== "prompt" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+                  <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, marginBottom: 2 }}>
+                    {isStudying ? `Studying ${studyDur} min` : `Break ${breakDur} min`}{isPaused && " · Paused"}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={isPaused ? resumePomodoro : pausePomodoro} style={{
+                      fontFamily: base.fontSans, fontSize: 12, fontWeight: 600, padding: "8px 22px", border: "none",
+                      background: isPaused ? activeColor : theme.crimson, color: theme.paper, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                    }}>{isPaused ? "Resume" : "Pause"}</button>
+                    {isStudying && <button onClick={stopAndLog} style={{
+                      fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 16px",
+                      border: `1px solid ${theme.dark}`, background: "transparent", color: theme.text, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                    }}>Stop & Log</button>}
+                    {isBreaking && <button onClick={endBreakEarly} style={{
+                      fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 16px",
+                      border: `1px solid ${theme.teal}`, background: "transparent", color: theme.teal, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                    }}>End Break</button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Stopwatch Controls ── */}
+          {timerMode === "stopwatch" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%", alignItems: "center" }}>
+              {elapsed > 0 && !swRunning && <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted }}>{Math.round(elapsed / 60)} min will be logged</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { if (!subject) return; setSwRunning(!swRunning); }} style={{
+                  fontFamily: base.fontSans, fontSize: 13, fontWeight: 600, padding: "10px 28px", border: "none",
+                  cursor: !subject ? "not-allowed" : "pointer", background: !subject ? theme.border : (swRunning ? theme.crimson : activeColor),
+                  color: theme.paper, letterSpacing: 1, textTransform: "uppercase",
+                }}>{swRunning ? "Pause" : elapsed > 0 ? "Resume" : "Start"}</button>
+                <button onClick={logStopwatch} style={{
+                  fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "6px 14px",
+                  border: `1px solid ${elapsed > 0 && subject ? theme.teal : theme.border}`,
+                  background: elapsed > 0 && subject ? theme.teal : "transparent",
+                  color: elapsed > 0 && subject ? theme.paper : theme.muted,
+                  cursor: elapsed > 0 && subject ? "pointer" : "not-allowed", textTransform: "uppercase", letterSpacing: 0.5,
+                }}>Log & Reset</button>
+              </div>
+              {!subject && <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.crimson, fontStyle: "italic" }}>Select a subject to start</div>}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Performance (column 2, row 1) ── */}
+      <div style={{ alignSelf: "stretch", display: "flex" }}>
+        <div style={{ flex: 1 }}><StudyPerformance sessions={sessions} checks={checks} /></div>
+      </div>
+
+      {/* ── Heatmap (column 3, row 1) ── */}
+      <div style={{ alignSelf: "stretch", display: "flex" }}>
+        <StudyHeatmap sessions={sessions} />
+      </div>
+
+      {/* ── Check-off (columns 2-3, row 2) ── */}
+      <div style={{ gridColumn: "2 / 4" }}>
+        <StudyCheckoff checks={checks} setChecks={setChecks} />
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── BROADSTREAM ─── */
+const BROADCAST_CHANNELS = [
+  { name: "BBC", yt: "bqvibt0wAZo" },
+  { name: "Sky News", yt: "YDvsBbKfLPA" },
+  { name: "Al Jazeera", yt: "gCNeDWCI0vo" },
+  { name: "Bloomberg", yt: "iEpJwprxDdk" },
+  { name: "NBC", yt: "LzRQCO52BgY" },
+  { name: "CBS", yt: "IEFQ2NzZ8H0" },
+];
+
+const RADIO_STATIONS = [
+  { name: "BBC Radio 4", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_fourfm" },
+  { name: "BBC World Service", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service" },
+  { name: "BBC Radio 1", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_one" },
+  { name: "LBC", url: "https://media-ssl.musicradio.com/LBC" },
+];
+
+function Broadstream() {
+  const [activeChannel, setActiveChannel] = useState(BROADCAST_CHANNELS[0]);
+  const [radioPlaying, setRadioPlaying] = useState(null);
+  const [volume, setVolume] = useState(0.7);
+  const audioRef = useRef(null);
+
+  const playRadio = (station) => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (radioPlaying?.name === station.name) { setRadioPlaying(null); return; }
+    const a = new Audio(station.url);
+    a.volume = volume;
+    a.play().catch(() => {});
+    audioRef.current = a;
+    setRadioPlaying(station);
+  };
+
+  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
+
+  return (
+    <Card title="Broadstream" accent>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", background: theme.dark, marginBottom: 10, border: `1px solid ${theme.border}` }}>
+          <iframe
+            src={`https://www.youtube.com/embed/${activeChannel.yt}?autoplay=1&controls=0&mute=1`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {BROADCAST_CHANNELS.map((ch) => (
+            <button key={ch.name} onClick={() => setActiveChannel(ch)} style={{
+              padding: "5px 10px", cursor: "pointer",
+              border: activeChannel?.name === ch.name ? `2px solid ${theme.crimson}` : `1px solid ${theme.border}`,
+              background: activeChannel?.name === ch.name ? theme.dark : theme.paper,
+              color: activeChannel?.name === ch.name ? theme.paper : theme.text,
+              fontFamily: base.fontSans, fontSize: 10, fontWeight: activeChannel?.name === ch.name ? 600 : 400,
+              borderRadius: 2,
+            }}>{ch.name}</button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Radio</div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+          {RADIO_STATIONS.map((s) => (
+            <button key={s.name} onClick={() => playRadio(s)} style={{
+              padding: "5px 10px", cursor: "pointer",
+              border: radioPlaying?.name === s.name ? `2px solid ${theme.crimson}` : `1px solid ${theme.border}`,
+              background: radioPlaying?.name === s.name ? theme.light : theme.paper,
+              fontFamily: base.fontSans, fontSize: 10, color: theme.text,
+              fontWeight: radioPlaying?.name === s.name ? 600 : 400, borderRadius: 2,
+            }}>
+              {s.name}
+              {radioPlaying?.name === s.name && <span style={{ fontSize: 8, color: theme.crimson, fontWeight: 700, marginLeft: 4 }}>■</span>}
+            </button>
+          ))}
+          {radioPlaying && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+              <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>Vol</span>
+              <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} style={{ width: 60, accentColor: theme.crimson }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ─── NEWS PAGE ─── */
+function NewsPage() {
+  const { articles, loading } = useRssFeeds(RSS_FEEDS);
+
+  return (
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2.5fr)", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Broadstream */}
+        <Broadstream />
+
+        {/* Top Recommended */}
+        <Card title="Top Recommended">
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {[
+              { title: "BBC News", url: "https://www.bbc.co.uk/news", desc: "UK & World news" },
+              { title: "Reuters", url: "https://www.reuters.com", desc: "Global wire service" },
+              { title: "Financial Times", url: "https://www.ft.com", desc: "Business & finance" },
+              { title: "The Economist", url: "https://www.economist.com", desc: "Analysis & opinion" },
+              { title: "Hacker News", url: "https://news.ycombinator.com", desc: "Tech & startups" },
+              { title: "arXiv", url: "https://arxiv.org", desc: "Academic preprints" },
+              { title: "Nature", url: "https://www.nature.com", desc: "Science research" },
+              { title: "The Guardian", url: "https://www.theguardian.com", desc: "UK news & comment" },
+            ].map((site, i) => (
+              <a
+                key={site.title}
+                href={site.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "9px 12px", textDecoration: "none",
+                  borderBottom: i < 7 ? `1px solid ${theme.light}` : "none",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div>
+                  <div style={{ fontFamily: base.fontSans, fontSize: 13, fontWeight: 500, color: theme.text }}>{site.title}</div>
+                  <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>{site.desc}</div>
+                </div>
+                <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, flexShrink: 0 }}>↗</span>
+              </a>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Right column: Live News — 3 columns in one card ── */}
+      <div>
+        <Card title="Live News" accent>
+          <p style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, margin: "0 0 12px", fontStyle: "italic" }}>
+            RSS feeds — refreshed every 10 minutes.
+          </p>
+
+          {/* 3-column grid: header + articles */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 0 }}>
+            {RSS_FEEDS.map((feed, fi) => {
+              const feedArticles = articles[feed.name] || [];
+              return (
+                <div key={feed.name} style={{
+                  borderLeft: fi > 0 ? `1px solid ${theme.light}` : "none",
+                }}>
+                  {/* Column header */}
+                  <div style={{
+                    fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                    textTransform: "uppercase", letterSpacing: 0.5, color: theme.dark,
+                    padding: "8px 12px", borderBottom: `2px solid ${feed.color}`,
+                  }}>
+                    {feed.name}
+                  </div>
+
+                  {/* Articles */}
+                  <div style={{ maxHeight: 600, overflowY: "auto" }}>
+                    {loading && feedArticles.length === 0 ? (
+                      <div style={{ padding: 14, fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic" }}>Loading...</div>
+                    ) : feedArticles.length === 0 ? (
+                      <div style={{ padding: 14, fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic" }}>No articles loaded</div>
+                    ) : (
+                      feedArticles.map((item, i) => (
+                        <a
+                          key={i}
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "block", padding: "10px 12px", textDecoration: "none",
+                            borderBottom: `1px solid ${theme.light}`,
+                            transition: "background 0.15s",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <div style={{ fontFamily: base.fontBody, fontSize: 13, fontWeight: 400, color: theme.text, lineHeight: 1.3, marginBottom: 3, wordBreak: "break-word" }}>
+                            {item.title}
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                            {item.description && (
+                              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, lineHeight: 1.3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {item.description}
+                              </div>
+                            )}
+                            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, whiteSpace: "nowrap", flexShrink: 0 }}>
+                              {timeAgo(item.pubDate)}
+                            </div>
+                          </div>
+                        </a>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+const ENERGY_LEVELS = [
+  { value: 1, label: "Rotting", color: "#4A6FA5", icon: "◉" },
+  { value: 2, label: "Lethargic", color: "#6A8EBF", icon: "◉" },
+  { value: 3, label: "Neutral", color: "#8B8B5E", icon: "◉" },
+  { value: 4, label: "Swooshing", color: "#BF7B4A", icon: "◉" },
+  { value: 5, label: "Pacing", color: "#A84032", icon: "◉" },
+];
+
+function energyColor(val) {
+  return ENERGY_LEVELS.find((e) => e.value === val)?.color || theme.muted;
+}
+
+/* ─── Energy Line Graph ─── */
+function EnergyGraph({ entries }) {
+  const [range, setRange] = useState("today");
+
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10);
+
+  const getDataPoints = () => {
+    const withEnergy = entries.filter((e) => e.energy);
+    if (range === "today") {
+      return withEnergy
+        .filter((e) => e.date.slice(0, 10) === todayKey)
+        .map((e) => ({
+          time: new Date(e.date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+          energy: e.energy,
+          sortKey: new Date(e.date).getTime(),
+        }))
+        .sort((a, b) => a.sortKey - b.sortKey);
+    } else if (range === "week") {
+      // Group by day for last 7 days
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const dayEntries = withEnergy.filter((e) => e.date.slice(0, 10) === key);
+        if (dayEntries.length > 0) {
+          const avg = dayEntries.reduce((a, e) => a + e.energy, 0) / dayEntries.length;
+          days.push({
+            time: d.toLocaleDateString("en-GB", { weekday: "short" }),
+            energy: Math.round(avg * 10) / 10,
+            sortKey: d.getTime(),
+          });
+        }
+      }
+      return days;
+    } else {
+      // Group by day for last 30 days
+      const days = [];
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const dayEntries = withEnergy.filter((e) => e.date.slice(0, 10) === key);
+        if (dayEntries.length > 0) {
+          const avg = dayEntries.reduce((a, e) => a + e.energy, 0) / dayEntries.length;
+          days.push({
+            time: d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+            energy: Math.round(avg * 10) / 10,
+            sortKey: d.getTime(),
+          });
+        }
+      }
+      return days;
+    }
+  };
+
+  const data = getDataPoints();
+  const tabs = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "month", label: "This Month" },
+  ];
+
+  // SVG line graph
+  const W = 268, H = 120, PAD = { top: 14, right: 10, bottom: 22, left: 24 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const xScale = (i) => PAD.left + (data.length > 1 ? (i / (data.length - 1)) * plotW : plotW / 2);
+  const yScale = (v) => PAD.top + plotH - ((v - 1) / 4) * plotH;
+
+  const linePath = data.map((d, i) => `${i === 0 ? "M" : "L"}${xScale(i).toFixed(1)},${yScale(d.energy).toFixed(1)}`).join(" ");
+  const areaPath = data.length > 1
+    ? linePath + ` L${xScale(data.length - 1).toFixed(1)},${yScale(1).toFixed(1)} L${xScale(0).toFixed(1)},${yScale(1).toFixed(1)} Z`
+    : "";
+
+  return (
+    <Card title="Energy Level">
+      {/* Range tabs */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 10 }}>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setRange(t.key)}
+            style={{
+              flex: 1, fontFamily: base.fontSans, fontSize: 9, fontWeight: range === t.key ? 600 : 400,
+              padding: "4px 6px", cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3,
+              border: `1px solid ${range === t.key ? theme.dark : theme.border}`,
+              background: range === t.key ? theme.dark : "transparent",
+              color: range === t.key ? theme.paper : theme.muted,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {data.length === 0 ? (
+        <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic" }}>
+            No energy data for this period
+          </span>
+        </div>
+      ) : (
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+          {/* Y-axis grid lines and labels */}
+          {[1, 2, 3, 4, 5].map((v) => (
+            <g key={v}>
+              <line x1={PAD.left} y1={yScale(v)} x2={W - PAD.right} y2={yScale(v)} stroke={theme.light} strokeWidth={1} />
+              <text x={PAD.left - 6} y={yScale(v) + 3} textAnchor="end"
+                style={{ fontSize: 8, fontFamily: base.fontSans, fill: theme.muted }}>
+                {v}
+              </text>
+            </g>
+          ))}
+          {/* Area fill */}
+          <path d={areaPath} fill={theme.teal} opacity={0.08} />
+          {/* Line */}
+          <path d={linePath} fill="none" stroke={theme.teal} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          {/* Data points */}
+          {data.map((d, i) => (
+            <g key={i}>
+              <circle cx={xScale(i)} cy={yScale(d.energy)} r={3.5} fill={energyColor(Math.round(d.energy))} stroke={theme.paper} strokeWidth={1.5} />
+              {/* X labels - show first, last, and middle for readability */}
+              {(i === 0 || i === data.length - 1 || (data.length > 4 && i === Math.floor(data.length / 2))) && (
+                <text x={xScale(i)} y={H - 4} textAnchor="middle"
+                  style={{ fontSize: 7, fontFamily: base.fontSans, fill: theme.muted }}>
+                  {d.time}
+                </text>
+              )}
+            </g>
+          ))}
+        </svg>
+      )}
+    </Card>
+  );
+}
+
+/* ─── JOURNAL PAGE ─── */
+function JournalPage({ entries, setEntries, writedowns, setWritedowns, wisdom }) {
+  const [body, setBody] = useState("");
+  const [tag, setTag] = useState("");
+  const [energy, setEnergy] = useState(3);
+  const [filterTag, setFilterTag] = useState("all");
+  const [selectedId, setSelectedId] = useState(null);
+  const [images, setImages] = useState([]);
+  const [quoteSeed] = useState(() => Math.random()); // random on load, stable across renders
+  const fileRef = useRef(null);
+  const textRef = useRef(null);
+
+  const allTags = [...new Set(entries.flatMap((e) => e.tags))].sort();
+
+  const readFileAsBase64 = (file) =>
+    new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    });
+
+  const handleFiles = async (files) => {
+    const imgFiles = [...files].filter((f) => f.type.startsWith("image/"));
+    const results = await Promise.all(imgFiles.map(readFileAsBase64));
+    setImages((prev) => [...prev, ...results]);
+  };
+
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imgItems = [...items].filter((i) => i.type.startsWith("image/"));
+    if (imgItems.length === 0) return;
+    e.preventDefault();
+    const files = imgItems.map((i) => i.getAsFile()).filter(Boolean);
+    await handleFiles(files);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.currentTarget.style.borderColor = theme.border;
+    if (e.dataTransfer?.files) await handleFiles(e.dataTransfer.files);
+  };
+
+  const removeImage = (idx) => setImages((prev) => prev.filter((_, i) => i !== idx));
+
+  const add = () => {
+    if (!body.trim() && images.length === 0) return;
+    const now = new Date();
+    const entry = {
+      id: Date.now(),
+      body: body.trim(),
+      images: [...images],
+      energy,
+      tags: tag.trim() ? tag.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean) : [],
+      date: now.toISOString(),
+      timestamp: now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    };
+    setEntries((prev) => [entry, ...prev]);
+    setBody("");
+    setTag("");
+    setImages([]);
+    setEnergy(3);
+  };
+
+  const remove = (id) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const filtered = filterTag === "all" ? entries : entries.filter((e) => e.tags.includes(filterTag));
+  const selected = entries.find((e) => e.id === selectedId);
+
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  };
+  const formatTime = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: 16, padding: 20, alignItems: "start" }}>
+      {/* ── LEFT: Compose + Selected Entry ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Compose */}
+        <Card accent>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h2 style={{ fontFamily: base.fontSerif, fontSize: 22, fontWeight: 700, color: theme.dark, margin: 0 }}>
+              What's up?
+            </h2>
+            <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+              {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} · {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </div>
+          </div>
+          <textarea
+            ref={textRef}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onPaste={handlePaste}
+            onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = theme.teal; }}
+            onDragLeave={(e) => { e.currentTarget.style.borderColor = theme.border; }}
+            onDrop={handleDrop}
+            placeholder="What's on your mind today... (paste or drop images here)"
+            rows={4}
+            style={{
+              width: "100%", fontFamily: base.fontBody, fontSize: 15, lineHeight: 1.7,
+              padding: 14, border: `1px solid ${theme.border}`, background: theme.salmon,
+              color: theme.text, outline: "none", resize: "vertical", boxSizing: "border-box",
+              borderRadius: 0, transition: "border-color 0.2s",
+            }}
+          />
+
+          {/* Image previews */}
+          {images.length > 0 && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              {images.map((img, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  <img src={img} alt="" style={{
+                    width: 80, height: 80, objectFit: "cover", border: `1px solid ${theme.border}`,
+                  }} />
+                  <button
+                    onClick={() => removeImage(i)}
+                    style={{
+                      position: "absolute", top: -6, right: -6,
+                      width: 18, height: 18, borderRadius: "50%",
+                      background: theme.crimson, color: theme.paper, border: "none",
+                      fontSize: 11, cursor: "pointer", display: "flex",
+                      alignItems: "center", justifyContent: "center", lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Energy selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "10px 0", borderTop: `1px solid ${theme.light}` }}>
+            <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>
+              Energy
+            </span>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              {ENERGY_LEVELS.map((lvl) => (
+                <button
+                  key={lvl.value}
+                  onClick={() => setEnergy(lvl.value)}
+                  title={lvl.label}
+                  style={{
+                    width: 30, height: 30, borderRadius: "50%", cursor: "pointer",
+                    border: energy === lvl.value ? `2.5px solid ${lvl.color}` : `1.5px solid ${theme.border}`,
+                    background: energy === lvl.value ? lvl.color : theme.paper,
+                    color: energy === lvl.value ? theme.paper : lvl.color,
+                    fontFamily: base.fontSans, fontSize: 13, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s", transform: energy === lvl.value ? "scale(1.15)" : "scale(1)",
+                    boxShadow: energy === lvl.value ? `0 0 0 3px ${lvl.color}22` : "none",
+                  }}
+                >
+                  {lvl.value}
+                </button>
+              ))}
+            </div>
+            <span style={{
+              fontFamily: base.fontSans, fontSize: 11, fontWeight: 500,
+              color: energyColor(energy), marginLeft: 4,
+            }}>
+              {ENERGY_LEVELS.find((l) => l.value === energy)?.label}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {/* Upload button */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 500,
+                padding: "7px 14px", border: `1px solid ${theme.border}`,
+                background: theme.paper, color: theme.muted, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 5,
+              }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>⬙</span> Add Image
+            </button>
+
+            <div style={{ position: "relative", flex: 1, minWidth: 140 }}>
+              <span style={{
+                position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                fontFamily: base.fontSans, fontSize: 11, color: theme.muted, pointerEvents: "none",
+              }}>
+                ⬥
+              </span>
+              <input
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+                placeholder="Tags (e.g. ideas, uni, personal)"
+                style={{
+                  width: "100%", fontFamily: base.fontSans, fontSize: 12, padding: "8px 10px 8px 24px",
+                  border: `1px solid ${theme.border}`, background: theme.paper, color: theme.text,
+                  outline: "none", boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <button
+              onClick={add}
+              style={{
+                fontFamily: base.fontSans, fontSize: 12, fontWeight: 600,
+                padding: "8px 24px", border: "none", background: theme.dark, color: theme.paper,
+                cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5,
+                opacity: (body.trim() || images.length > 0) ? 1 : 0.4,
+                pointerEvents: (body.trim() || images.length > 0) ? "auto" : "none",
+              }}
+            >
+              Save Entry
+            </button>
+          </div>
+        </Card>
+
+        {/* Write Downs */}
+        {writedowns.length > 0 && (
+          <div>
+            <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson,
+              }}>
+                Write Downs
+              </span>
+              <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+                ({writedowns.length})
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {writedowns.map((w) => (
+                <div
+                  key={w.id}
+                  style={{
+                    padding: "10px 12px",
+                    background: theme.paper,
+                    border: `1px solid ${theme.border}`, borderBottom: "none",
+                    display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: base.fontBody, fontSize: 14, color: theme.text, lineHeight: 1.4 }}>
+                      {w.text}
+                    </div>
+                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 3 }}>
+                      {new Date(w.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {new Date(w.date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setWritedowns((prev) => prev.filter((x) => x.id !== w.id))}
+                    style={{
+                      fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
+                      border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div style={{ borderTop: `1px solid ${theme.border}` }} />
+            </div>
+          </div>
+        )}
+
+        {/* Selected entry expanded view */}
+        {selected && (
+          <Card style={{ borderLeft: `3px solid ${theme.teal}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <div style={{ fontFamily: base.fontSerif, fontSize: 16, fontWeight: 600, color: theme.dark }}>
+                  {formatDate(selected.date)}
+                </div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                  {formatTime(selected.date)}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {selected.energy && (
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: energyColor(selected.energy), color: theme.paper,
+                    fontFamily: base.fontSans, fontSize: 12, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {selected.energy}
+                  </div>
+                )}
+                <button
+                  onClick={() => setSelectedId(null)}
+                  style={{ fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div style={{
+              fontFamily: base.fontBody, fontSize: 15, color: theme.text,
+              lineHeight: 1.75, whiteSpace: "pre-wrap",
+            }}>
+              {selected.body}
+            </div>
+            {/* Entry images */}
+            {selected.images && selected.images.length > 0 && (
+              <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+                {selected.images.map((img, i) => (
+                  <img key={i} src={img} alt="" style={{
+                    maxWidth: "100%", maxHeight: 300, objectFit: "contain",
+                    border: `1px solid ${theme.border}`,
+                  }} />
+                ))}
+              </div>
+            )}
+            {selected.tags.length > 0 && (
+              <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+                {selected.tags.map((t) => (
+                  <span key={t} style={{
+                    fontFamily: base.fontSans, fontSize: 10, fontWeight: 500, color: theme.teal,
+                    background: theme.light, padding: "3px 10px", textTransform: "uppercase", letterSpacing: 0.5,
+                  }}>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {!selected && entries.length > 0 && (
+          <div style={{ fontFamily: base.fontBody, fontSize: 14, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: 20 }}>
+            Select an entry from the sidebar to read it here.
+          </div>
+        )}
+      </div>
+
+      {/* ── RIGHT: Quote + Energy Graph + Entry List ── */}
+      <div style={{ position: "sticky", top: 16, maxHeight: "calc(100vh - 140px)", overflowY: "auto" }}>
+        {/* Words of Wisdom */}
+        {wisdom && wisdom.length > 0 && (() => {
+          // Try to match by average energy over past 24h
+          const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+          const recent = entries.filter((e) => e.energy && new Date(e.date).getTime() > cutoff);
+          let pool = wisdom;
+          let accentColor = theme.muted;
+          if (recent.length > 0) {
+            const avgEnergy = recent.reduce((a, e) => a + e.energy, 0) / recent.length;
+            const targetLevel = Math.round(avgEnergy);
+            const matching = wisdom.filter((w) => w.energy === targetLevel);
+            if (matching.length > 0) {
+              pool = matching;
+              accentColor = energyColor(targetLevel);
+            }
+          }
+          const quote = pool[Math.floor(quoteSeed * pool.length)];
+          if (!quote) return null;
+          return (
+            <div style={{
+              background: theme.paper, border: `1px solid ${theme.border}`,
+              borderLeft: `3px solid ${accentColor}`,
+              padding: "14px 16px", marginBottom: 12,
+            }}>
+              <div style={{
+                fontFamily: base.fontBody, fontSize: 14, fontStyle: "italic",
+                color: theme.text, lineHeight: 1.55,
+              }}>
+                "{quote.text}"
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Energy Graph */}
+        <div style={{ marginBottom: 12 }}>
+          <EnergyGraph entries={entries} />
+        </div>
+
+        <div style={{ marginBottom: 8 }}>
+          <span style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+            textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson,
+          }}>
+            Past Entries
+          </span>
+          <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, marginLeft: 8 }}>
+            ({filtered.length})
+          </span>
+        </div>
+
+        {/* Tag filter */}
+        {allTags.length > 0 && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+            <button
+              onClick={() => setFilterTag("all")}
+              style={{
+                fontFamily: base.fontSans, fontSize: 10, padding: "3px 10px", cursor: "pointer",
+                border: `1px solid ${filterTag === "all" ? theme.dark : theme.border}`,
+                background: filterTag === "all" ? theme.dark : "transparent",
+                color: filterTag === "all" ? theme.paper : theme.muted,
+                textTransform: "uppercase", letterSpacing: 0.5,
+              }}
+            >
+              All
+            </button>
+            {allTags.map((t) => (
+              <button
+                key={t}
+                onClick={() => setFilterTag(t === filterTag ? "all" : t)}
+                style={{
+                  fontFamily: base.fontSans, fontSize: 10, padding: "3px 10px", cursor: "pointer",
+                  border: `1px solid ${filterTag === t ? theme.teal : theme.border}`,
+                  background: filterTag === t ? theme.teal : "transparent",
+                  color: filterTag === t ? theme.paper : theme.muted,
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Entry list */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          {filtered.map((e) => (
+            <div
+              key={e.id}
+              onClick={() => setSelectedId(e.id)}
+              style={{
+                padding: "10px 12px", cursor: "pointer",
+                background: selectedId === e.id ? theme.light : theme.paper,
+                border: `1px solid ${theme.border}`, borderBottom: "none",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(ev) => { if (selectedId !== e.id) ev.currentTarget.style.background = theme.salmon; }}
+              onMouseLeave={(ev) => { if (selectedId !== e.id) ev.currentTarget.style.background = theme.paper; }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1, marginRight: 8, minWidth: 0 }}>
+                  {/* Timestamp */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
+                    {e.energy && (
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: energyColor(e.energy), flexShrink: 0, display: "inline-block",
+                      }} />
+                    )}
+                    <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>
+                      {new Date(e.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {formatTime(e.date)}
+                    </span>
+                  </div>
+                  <div style={{
+                    fontFamily: base.fontBody, fontSize: 13, color: theme.text,
+                    lineHeight: 1.35,
+                    overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                  }}>
+                    {e.body || "(image entry)"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, flexShrink: 0 }}>
+                  {/* Image thumbnail indicator */}
+                  {e.images && e.images.length > 0 && (
+                    <img src={e.images[0]} alt="" style={{
+                      width: 32, height: 32, objectFit: "cover", border: `1px solid ${theme.border}`,
+                    }} />
+                  )}
+                  <button
+                    onClick={(ev) => { ev.stopPropagation(); remove(e.id); }}
+                    style={{
+                      fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
+                      border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {e.tags.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                  {e.tags.map((t) => (
+                    <span key={t} style={{
+                      fontFamily: base.fontSans, fontSize: 9, color: theme.teal, background: theme.light,
+                      padding: "1px 6px", textTransform: "uppercase", letterSpacing: 0.3,
+                    }}>
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {filtered.length > 0 && <div style={{ borderTop: `1px solid ${theme.border}` }} />}
+          {filtered.length === 0 && (
+            <div style={{
+              padding: 20, textAlign: "center", background: theme.paper,
+              border: `1px solid ${theme.border}`,
+            }}>
+              <p style={{ fontFamily: base.fontBody, fontStyle: "italic", color: theme.muted, fontSize: 13, margin: 0 }}>
+                {entries.length === 0 ? "No entries yet — write your first one." : "No entries match this tag."}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── RECOMMENDATIONS PAGE ─── */
+/* ─── COMMERCIAL PAGE ─── */
+function CommercialPage() {
+  const [feeds, setFeeds, loaded] = usePersistedState("daily-brief:commercial-feeds", []);
+  const [nameInput, setNameInput] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+
+  const rssFeeds = feeds.map((f) => ({ name: f.name, rss: f.url, color: theme.muted }));
+  const { articles, loading } = useRssFeeds(rssFeeds.length > 0 ? rssFeeds : []);
+
+  const addFeed = () => {
+    if (!nameInput.trim() || !urlInput.trim()) return;
+    setFeeds((prev) => [...prev, { id: Date.now(), name: nameInput.trim(), url: urlInput.trim() }]);
+    setNameInput(""); setUrlInput("");
+  };
+
+  const removeFeed = (id) => setFeeds((prev) => prev.filter((f) => f.id !== id));
+
+  // Merge all articles chronologically
+  const allItems = [];
+  feeds.forEach((feed) => {
+    (articles[feed.name] || []).forEach((item) => allItems.push({ ...item, source: feed.name }));
+  });
+  allItems.sort((a, b) => {
+    const da = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+    const db = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+    return db - da;
+  });
+
+  if (!loaded) return null;
+
+  return (
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
+      {/* Left: LinkedIn Jobs */}
+      <div>
+        <Card title="Job Listings" accent>
+          <div style={{ width: "100%", height: 700, border: `1px solid ${theme.border}`, overflow: "hidden", position: "relative" }}>
+            <iframe
+              loading="lazy"
+              src="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&originalSubdomain=uk&refresh=true"
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title="LinkedIn Jobs" referrerPolicy="no-referrer"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px 12px", background: theme.salmon, borderTop: `1px solid ${theme.border}` }}>
+              <a href="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&originalSubdomain=uk&refresh=true"
+                target="_blank" rel="noopener noreferrer" style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.teal }}>
+                Open in LinkedIn ↗
+              </a>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Right: Commercial Awareness */}
+      <div>
+        <Card title="Commercial Awareness" accent>
+          {/* Add feed form */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }} placeholder="Name"
+              style={{ width: 100, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+            <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }}
+              placeholder="RSS feed URL"
+              style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+            <button onClick={addFeed} style={{
+              fontFamily: base.fontSans, fontSize: 10, fontWeight: 600, padding: "6px 12px",
+              border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+              textTransform: "uppercase", letterSpacing: 0.5,
+              opacity: nameInput.trim() && urlInput.trim() ? 1 : 0.4,
+            }}>Add</button>
+          </div>
+
+          {/* Feed chips */}
+          {feeds.length > 0 && (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${theme.light}` }}>
+              {feeds.map((f) => (
+                <div key={f.id} style={{
+                  display: "flex", alignItems: "center", gap: 3, padding: "2px 8px",
+                  background: theme.light, fontFamily: base.fontSans, fontSize: 10, color: theme.text, borderRadius: 2,
+                }}>
+                  <span style={{ fontWeight: 500 }}>{f.name}</span>
+                  <button onClick={() => removeFeed(f.id)} style={{ fontSize: 11, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Articles */}
+          {feeds.length === 0 ? (
+            <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
+              Add RSS feeds above to see commercial property news here.
+            </div>
+          ) : loading ? (
+            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic", padding: 14 }}>Fetching feeds...</div>
+          ) : allItems.length === 0 ? (
+            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic", padding: 14 }}>No articles found.</div>
+          ) : (
+            <div style={{ maxHeight: 580, overflowY: "auto" }}>
+              {allItems.slice(0, 30).map((item, i) => (
+                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                  display: "block", padding: "8px 4px", textDecoration: "none",
+                  borderBottom: `1px solid ${theme.light}`, transition: "background 0.15s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.text, lineHeight: 1.35 }}>{item.title}</div>
+                  {item.description && (
+                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+                    <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{item.source}</span>
+                    <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+const AUCTORIAL_FEED = [{ name: "Auctorial", rss: "https://auctorial.com/users/el-GgbDATq-gR2a9H_cERg%3D%3D/feed", color: "#7A6B8E" }];
+const ARTICLES_FEEDS = [{ name: "Literary Hub", rss: "https://lithub.com/feed/", color: "#5B7A6A" }];
+
+const RECS = [
+  {
+    label: "Books",
+    link: "https://annas-archive.gl/",
+    linkLabel: "Anna's Archive",
+    items: [
+      { title: "Thinking, Fast and Slow", author: "Daniel Kahneman", genre: "Psychology" },
+      { title: "Sapiens", author: "Yuval Noah Harari", genre: "History" },
+      { title: "The Pragmatic Programmer", author: "Hunt & Thomas", genre: "Technology" },
+      { title: "Atomic Habits", author: "James Clear", genre: "Self-improvement" },
+      { title: "Dune", author: "Frank Herbert", genre: "Sci-Fi" },
+      { title: "The Remains of the Day", author: "Kazuo Ishiguro", genre: "Literary Fiction" },
+      { title: "Meditations", author: "Marcus Aurelius", genre: "Philosophy" },
+      { title: "The Hitchhiker's Guide to the Galaxy", author: "Douglas Adams", genre: "Comedy Sci-Fi" },
+    ],
+  },
+  {
+    label: "Films",
+    link: "https://www.goojara.is/",
+    linkLabel: "Goojara",
+    items: [
+      { title: "Interstellar", author: "Christopher Nolan", genre: "Sci-Fi" },
+      { title: "Whiplash", author: "Damien Chazelle", genre: "Drama" },
+      { title: "Parasite", author: "Bong Joon-ho", genre: "Thriller" },
+      { title: "The Grand Budapest Hotel", author: "Wes Anderson", genre: "Comedy" },
+      { title: "Arrival", author: "Denis Villeneuve", genre: "Sci-Fi" },
+      { title: "12 Angry Men", author: "Sidney Lumet", genre: "Drama" },
+      { title: "Everything Everywhere All at Once", author: "Daniels", genre: "Action" },
+      { title: "The Social Network", author: "David Fincher", genre: "Biography" },
+    ],
+  },
+  {
+    label: "Podcasts & Albums",
+    link: "https://open.spotify.com/",
+    linkLabel: "Spotify",
+    items: [
+      { title: "Huberman Lab", author: "Andrew Huberman", genre: "Science Podcast" },
+      { title: "Lex Fridman Podcast", author: "Lex Fridman", genre: "Interview Podcast" },
+      { title: "Kid A", author: "Radiohead", genre: "Album" },
+      { title: "To Pimp a Butterfly", author: "Kendrick Lamar", genre: "Album" },
+      { title: "99% Invisible", author: "Roman Mars", genre: "Design Podcast" },
+      { title: "In Rainbows", author: "Radiohead", genre: "Album" },
+      { title: "Rest Is History", author: "Holland & Sandbrook", genre: "History Podcast" },
+      { title: "Igor", author: "Tyler, the Creator", genre: "Album" },
+    ],
+  },
+];
+
+function RssFeedList({ items, loading, emptyMsg }) {
+  if (loading) return <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic" }}>Fetching...</div>;
+  if (!items || items.length === 0) return <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic" }}>{emptyMsg}</div>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, maxHeight: 300, overflowY: "auto" }}>
+      {items.map((item, i) => (
+        <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+          display: "block", padding: "10px 12px", textDecoration: "none",
+          borderBottom: i < items.length - 1 ? `1px solid ${theme.light}` : "none",
+          transition: "background 0.15s",
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <div style={{ fontFamily: base.fontBody, fontSize: 14, color: theme.text, lineHeight: 1.35, marginBottom: 2 }}>{item.title}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            {item.description && (
+              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, lineHeight: 1.3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>
+            )}
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, whiteSpace: "nowrap", flexShrink: 0 }}>{timeAgo(item.pubDate)}</div>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function RecommendationsPage() {
+  const { articles: authorArticles, loading: authorsLoading } = useRssFeeds(AUCTORIAL_FEED);
+  const { articles: articlesData, loading: articlesLoading } = useRssFeeds(ARTICLES_FEEDS);
+
+  return (
+    <div style={{ padding: 20 }}>
+      {/* Top row: Authors + Articles side by side */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, marginBottom: 20 }}>
+        <Card title="Authors" accent>
+          <RssFeedList items={authorArticles["Auctorial"]} loading={authorsLoading} emptyMsg="No new posts from your authors." />
+        </Card>
+        <Card title="Articles" accent>
+          <RssFeedList items={articlesData["Literary Hub"]} loading={articlesLoading} emptyMsg="No new articles." />
+        </Card>
+      </div>
+
+      {/* Bottom row: Books, Films, Podcasts & Albums */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+        {RECS.map((section) => (
+          <Card key={section.label} title={section.label}>
+            <a href={section.link} target="_blank" rel="noopener noreferrer" style={{
+              display: "inline-block", fontFamily: base.fontSans, fontSize: 10, fontWeight: 500,
+              color: theme.teal, background: theme.salmon, padding: "3px 10px",
+              textDecoration: "none", border: `1px solid ${theme.wheat}`, marginBottom: 10,
+            }}>
+              {section.linkLabel} ↗
+            </a>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, maxHeight: 300, overflowY: "auto" }}>
+              {section.items.map((item, i) => (
+                <div key={i} style={{
+                  padding: "8px 10px",
+                  borderBottom: i < section.items.length - 1 ? `1px solid ${theme.light}` : "none",
+                }}>
+                  <div style={{ fontFamily: base.fontSerif, fontSize: 13, fontWeight: 600, color: theme.dark, lineHeight: 1.3 }}>{item.title}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2, gap: 6 }}>
+                    <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>{item.author}</span>
+                    <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.teal, background: theme.light, padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.3, flexShrink: 0 }}>{item.genre}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── SOCIAL PAGE ─── */
+const SOCIAL_TAGS = ["X", "Youtube", "Reddit", "Pinterest", "Local", "Events"];
+
+function SocialPage() {
+  const [accounts, setAccounts, loaded] = usePersistedState("daily-brief:social-accounts", []);
+  const [feedUrl, setFeedUrl] = useState("");
+  const [feedName, setFeedName] = useState("");
+  const [feedTag, setFeedTag] = useState("X");
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef(null);
+  const dropRef = useRef(null);
+
+  // Seed default accounts and migrate IRL → Local
+  useEffect(() => {
+    if (!loaded) return;
+    // Migrate old IRL tags to Local
+    if (accounts.some((a) => a.tag === "IRL")) {
+      setAccounts((prev) => prev.map((a) => a.tag === "IRL" ? { ...a, tag: "Local" } : a));
+      return;
+    }
+    const defaults = [];
+    if (!accounts.some((a) => a.tag === "Reddit")) {
+      defaults.push(
+        { id: Date.now(), name: "r/cambridge_uni", url: "https://www.reddit.com/r/cambridge_uni/.rss", tag: "Reddit", source: "url" },
+        { id: Date.now() + 1, name: "r/cambridge", url: "https://www.reddit.com/r/cambridge/.rss", tag: "Reddit", source: "url" },
+      );
+    }
+    if (!accounts.some((a) => a.tag === "Pinterest")) {
+      defaults.push(
+        { id: Date.now() + 2, name: "Pinterest", url: "https://www.pinterest.com/owmybaroquendick/feed.rss", tag: "Pinterest", source: "url" },
+      );
+    }
+    if (defaults.length > 0) setAccounts((prev) => [...prev, ...defaults]);
+  }, [loaded]);
+
+  // Only fetch URL-based accounts
+  const urlAccounts = accounts.filter((a) => a.source === "url" && a.url);
+  const allFeeds = urlAccounts.map((a) => ({ name: a.name, rss: a.url, color: theme.muted }));
+  const { articles, loading } = useRssFeeds(allFeeds.length > 0 ? allFeeds : []);
+
+  const parseRssFile = (xmlText) => {
+    try {
+      const clean = xmlText.trim().replace(/^\uFEFF/, "");
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(clean, "text/xml");
+      let items = [...doc.querySelectorAll("item")];
+      if (items.length === 0) items = [...doc.querySelectorAll("entry")];
+      return items.slice(0, 30).map((item) => {
+        const getText = (tags) => {
+          for (const tag of tags) { const el = item.querySelector(tag); if (el?.textContent?.trim()) return el.textContent.trim(); }
+          return "";
+        };
+        const getLink = () => { const el = item.querySelector("link"); return el?.getAttribute("href") || el?.textContent?.trim() || ""; };
+        const getImage = () => {
+          const enc = item.querySelector("enclosure");
+          if (enc?.getAttribute("url")) return enc.getAttribute("url");
+          const allEls = item.getElementsByTagName("*");
+          for (let j = 0; j < allEls.length; j++) {
+            const el = allEls[j];
+            const ln = (el.localName || el.tagName || "").toLowerCase();
+            if ((ln === "thumbnail" || ln === "content" || ln === "media:thumbnail" || ln === "media:content") && el.getAttribute("url")) return el.getAttribute("url");
+          }
+          // YouTube: video ID → thumbnail
+          const linkEl = item.querySelector("link");
+          const linkText = linkEl?.getAttribute("href") || linkEl?.textContent || "";
+          const ytm = linkText.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+          if (ytm) return `https://i.ytimg.com/vi/${ytm[1]}/mqdefault.jpg`;
+          for (let j = 0; j < allEls.length; j++) {
+            const ln = (allEls[j].localName || allEls[j].tagName || "").toLowerCase();
+            if ((ln === "videoid" || ln === "yt:videoid") && allEls[j].textContent) return `https://i.ytimg.com/vi/${allEls[j].textContent.trim()}/mqdefault.jpg`;
+          }
+          const descHtml = item.querySelector("description")?.textContent || item.querySelector("summary")?.textContent || "";
+          const imgMatch = descHtml.match(/<img[^>]+src=["']([^"']+)/);
+          if (imgMatch) return imgMatch[1];
+          const urlMatch = descHtml.match(/(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|gif|webp))/i);
+          if (urlMatch) return urlMatch[1];
+          return "";
+        };
+        return {
+          title: getText(["title"]),
+          link: getText(["link"]) || getLink(),
+          pubDate: getText(["pubDate", "published", "updated"]),
+          description: getText(["description", "summary"]).replace(/<[^>]*>/g, "").slice(0, 100),
+          image: getImage(),
+        };
+      }).filter((a) => a.title);
+    } catch { return []; }
+  };
+
+  const addFromUrl = () => {
+    if (!feedUrl.trim() || !feedName.trim()) return;
+    setAccounts((prev) => [...prev, { id: Date.now(), name: feedName.trim(), url: feedUrl.trim(), tag: feedTag, source: "url" }]);
+    setFeedUrl(""); setFeedName("");
+  };
+
+  const processFile = async (file) => {
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseRssFile(text);
+    const name = feedName.trim() || file.name.replace(/\.[^.]+$/, "") || "Uploaded feed";
+    setAccounts((prev) => [...prev, { id: Date.now(), name, tag: feedTag, source: "file", fileArticles: parsed }]);
+    setFeedName("");
+  };
+
+  const handleFileInput = (e) => { processFile(e.target.files?.[0]); e.target.value = ""; };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const removeAccount = (id) => setAccounts((prev) => prev.filter((a) => a.id !== id));
+
+  // Merge all items for a tag, sorted chronologically
+  const getTagItems = (tag) => {
+    const tagAccounts = accounts.filter((a) => a.tag === tag);
+    const allItems = [];
+    tagAccounts.forEach((account) => {
+      const items = account.source === "file" ? (account.fileArticles || []) : (articles[account.name] || []);
+      items.forEach((item) => allItems.push({ ...item, accountName: account.name }));
+    });
+    // Sort by date descending
+    allItems.sort((a, b) => {
+      const da = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+      const db = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+      return db - da;
+    });
+    return allItems;
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div style={{ padding: 20 }}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(44, 36, 24, 0.15)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            background: theme.paper, border: `3px dashed ${theme.crimson}`, borderRadius: 8,
+            padding: "40px 60px", textAlign: "center",
+          }}>
+            <div style={{ fontFamily: base.fontSerif, fontSize: 20, fontWeight: 600, color: theme.dark }}>Drop RSS file here</div>
+            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, marginTop: 6 }}>Tagged as: {feedTag}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Grid: Add Feed left, IRL banner top-right, feed columns bottom-right */}
+      <div style={{ display: "grid", gridTemplateColumns: "200px repeat(4, minmax(0, 1fr))", gridTemplateRows: "auto auto 1fr", gap: 16, alignItems: "start" }}>
+        {/* ── Left: Add Feed (spans all rows) ── */}
+        <div style={{ gridRow: "1 / 4" }}>
+          <Card accent>
+            <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson, marginBottom: 12 }}>
+              Add Feed
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Name</div>
+                <input value={feedName} onChange={(e) => setFeedName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFromUrl(); }} placeholder="e.g. @username"
+                  style={{ width: "100%", fontFamily: base.fontSans, fontSize: 12, padding: "7px 10px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>RSS Feed URL</div>
+                <input value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFromUrl(); }} placeholder="https://..."
+                  style={{ width: "100%", fontFamily: base.fontSans, fontSize: 12, padding: "7px 10px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Platform</div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {SOCIAL_TAGS.map((t) => (
+                    <button key={t} onClick={() => setFeedTag(t)} style={{
+                      fontFamily: base.fontSans, fontSize: 9, padding: "5px 8px", cursor: "pointer",
+                      border: feedTag === t ? `2px solid ${theme.dark}` : `1px solid ${theme.border}`,
+                      background: feedTag === t ? theme.dark : "transparent",
+                      color: feedTag === t ? theme.paper : theme.text,
+                      textTransform: "uppercase", letterSpacing: 0.3, borderRadius: 2,
+                    }}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={addFromUrl} style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 0", width: "100%",
+                border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+                textTransform: "uppercase", letterSpacing: 0.5,
+                opacity: feedUrl.trim() && feedName.trim() ? 1 : 0.4,
+              }}>Add URL</button>
+              <div>
+                <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileInput} />
+                <button onClick={() => fileRef.current?.click()} style={{
+                  fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, padding: "8px 0", width: "100%",
+                  border: `1px solid ${theme.border}`, background: theme.paper, color: theme.text, cursor: "pointer",
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                }}>Upload File</button>
+              </div>
+            </div>
+
+            {/* Managed feeds */}
+            {accounts.length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px solid ${theme.light}`, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Feeds</div>
+                {accounts.map((a) => (
+                  <div key={a.id} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0",
+                    borderBottom: `1px solid ${theme.light}`,
+                  }}>
+                    <div style={{ minWidth: 0, cursor: "pointer", flex: 1 }} onClick={() => {
+                      if (a.source === "file" && a.fileArticles) {
+                        // Download as XML
+                        const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>${a.name}</title>${a.fileArticles.map((item) => `<item><title>${item.title}</title><link>${item.link}</link></item>`).join("")}</channel></rss>`;
+                        const blob = new Blob([xml], { type: "application/rss+xml" });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url; link.download = `${a.name}.xml`; link.click();
+                        URL.revokeObjectURL(url);
+                      } else if (a.url) {
+                        navigator.clipboard.writeText(a.url).then(() => {
+                          const el = document.getElementById(`feed-${a.id}`);
+                          if (el) { el.textContent = "Copied!"; setTimeout(() => { el.textContent = a.name; }, 1000); }
+                        });
+                      }
+                    }} title={a.source === "file" ? "Click to download RSS" : "Click to copy URL"}>
+                      <div id={`feed-${a.id}`} style={{ fontFamily: base.fontSans, fontSize: 10, fontWeight: 500, color: theme.teal, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textDecorationStyle: "dotted" }}>{a.name}</div>
+                      <div style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted }}>{a.tag}{a.source === "file" ? " · file" : ""}</div>
+                    </div>
+                    <button onClick={() => removeAccount(a.id)} style={{
+                      fontSize: 12, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0,
+                    }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* ── Local News banner (spans columns 2-6, row 1) ── */}
+        <div style={{ gridColumn: "2 / 6" }}>
+          <Card title="Local News" accent style={{ padding: "14px 20px 0" }}>
+            {(() => {
+              const localAccounts = accounts.filter((a) => a.tag === "Local");
+              const localItems = getTagItems("Local");
+              return localAccounts.length === 0 ? (
+                <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0 20px" }}>
+                  Add RSS feeds tagged "Local" to see local news here.
+                </div>
+              ) : loading && localAccounts.some((a) => a.source === "url") && localItems.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: "10px 0 20px" }}>Loading...</div>
+              ) : localItems.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: "10px 0 20px" }}>No items found</div>
+              ) : (
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 10 }}>
+                  {localItems.slice(0, 30).map((item, i) => (
+                    <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                      display: "flex", flexDirection: "column", minWidth: 200, maxWidth: 220, padding: "10px",
+                      background: theme.salmon, border: `1px solid ${theme.border}`, textDecoration: "none",
+                      flexShrink: 0, transition: "background 0.15s", borderRadius: 2,
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = theme.light; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                    >
+                      {item.image ? (
+                        <img referrerPolicy="no-referrer" src={item.image} alt="" style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 2, marginBottom: 6, background: theme.light }}
+                          onError={(e) => { e.target.style.display = "none"; }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 90, background: theme.light, borderRadius: 2, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>Local</span>
+                        </div>
+                      )}
+                      <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.text, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.title}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                        <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted }}>{item.accountName}</span>
+                        <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()}
+          </Card>
+        </div>
+
+        {/* ── Events for You banner (spans columns 2-6, row 2) ── */}
+        <div style={{ gridColumn: "2 / 6" }}>
+          <Card title="Events for You" accent style={{ padding: "14px 20px 0" }}>
+            {(() => {
+              const eventsAccounts = accounts.filter((a) => a.tag === "Events");
+              const eventsItems = getTagItems("Events");
+              return eventsAccounts.length === 0 ? (
+                <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "12px 0 20px" }}>
+                  Add RSS feeds tagged "Events" to see upcoming events here.
+                </div>
+              ) : loading && eventsAccounts.some((a) => a.source === "url") && eventsItems.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: "10px 0 20px" }}>Loading...</div>
+              ) : eventsItems.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: "10px 0 20px" }}>No events found</div>
+              ) : (
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 10 }}>
+                  {eventsItems.slice(0, 30).map((item, i) => (
+                    <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                      display: "flex", flexDirection: "column", minWidth: 200, maxWidth: 220, padding: "10px",
+                      background: theme.salmon, border: `1px solid ${theme.border}`, textDecoration: "none",
+                      flexShrink: 0, transition: "background 0.15s", borderRadius: 2,
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = theme.light; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                    >
+                      {item.image ? (
+                        <img referrerPolicy="no-referrer" src={item.image} alt="" style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 2, marginBottom: 6, background: theme.light }}
+                          onError={(e) => { e.target.style.display = "none"; }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 90, background: theme.light, borderRadius: 2, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>Event</span>
+                        </div>
+                      )}
+                      <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.text, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.title}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                        <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted }}>{item.accountName}</span>
+                        <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()}
+          </Card>
+        </div>
+
+        {/* ── Feed columns (row 3, columns 2-5) ── */}
+        {SOCIAL_TAGS.filter((t) => t !== "Local" && t !== "Events").map((tag) => {
+          const tagAccounts = accounts.filter((a) => a.tag === tag);
+          const items = getTagItems(tag);
+          return (
+            <div key={tag}>
+              <div style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson,
+                marginBottom: 10, paddingBottom: 6, borderBottom: `2px solid ${theme.crimson}`,
+              }}>{tag} <span style={{ fontWeight: 400, color: theme.muted, fontSize: 9 }}>({tagAccounts.length})</span></div>
+              {tagAccounts.length === 0 ? (
+                <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", padding: "16px 0", textAlign: "center" }}>
+                  No accounts added
+                </div>
+              ) : loading && tagAccounts.some((a) => a.source === "url") && items.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>Loading feeds...</div>
+              ) : items.length === 0 ? (
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>No posts found</div>
+              ) : (
+                <Card style={{ padding: 0 }}>
+                  <div style={{ maxHeight: 500, overflowY: "auto" }}>
+                    {items.slice(0, 30).map((item, i) => (
+                      <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                        display: "block", padding: "8px 12px", textDecoration: "none",
+                        borderBottom: i < Math.min(items.length, 30) - 1 ? `1px solid ${theme.light}` : "none",
+                        transition: "background 0.15s",
+                      }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <div style={{ display: "flex", gap: 10 }}>
+                          {item.image && (
+                            <img referrerPolicy="no-referrer" src={item.image} alt="" style={{
+                              width: 56, height: 56, objectFit: "cover", borderRadius: 2,
+                              flexShrink: 0, background: theme.light,
+                            }} onError={(e) => { e.target.style.display = "none"; }} />
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.text, lineHeight: 1.35 }}>{item.title}</div>
+                            {item.description && (
+                              <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, lineHeight: 1.3, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>
+                            )}
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+                              <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{item.accountName}</span>
+                              <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── HEALTH PAGE ─── */
+function HealthPage() {
+  const [healthData, setHealthData, loaded] = usePersistedState("daily-brief:health", {});
+  const todayKey = new Date().toISOString().slice(0, 10);
+
+  const today = healthData[todayKey] || { water: 0, sleep: "", exercise: [], meals: [], notes: "" };
+
+  const updateToday = (updates) => {
+    setHealthData((prev) => ({
+      ...prev,
+      [todayKey]: { ...today, ...updates },
+    }));
+  };
+
+  const [exerciseInput, setExerciseInput] = useState("");
+  const [mealInput, setMealInput] = useState("");
+
+  // Last 7 days for the overview
+  const weekDays = [...Array(7)].map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const key = d.toISOString().slice(0, 10);
+    const data = healthData[key] || {};
+    return {
+      key,
+      label: d.toLocaleDateString("en-GB", { weekday: "short" }),
+      water: data.water || 0,
+      sleep: parseFloat(data.sleep) || 0,
+      exerciseCount: (data.exercise || []).length,
+      mealCount: (data.meals || []).length,
+      isToday: key === todayKey,
+    };
+  });
+
+  if (!loaded) return null;
+
+  return (
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+      {/* ── Left: Today's Tracking ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Card accent>
+          <h2 style={{ fontFamily: base.fontSerif, fontSize: 22, fontWeight: 700, color: theme.dark, margin: "0 0 14px" }}>
+            Today
+          </h2>
+
+          {/* Water */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Water — {today.water} glasses
+            </div>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              {[1,2,3,4,5,6,7,8].map((n) => (
+                <button key={n} onClick={() => updateToday({ water: n })} style={{
+                  width: 28, height: 28, borderRadius: "50%", cursor: "pointer",
+                  border: `1.5px solid ${n <= today.water ? "#4A6FA5" : theme.border}`,
+                  background: n <= today.water ? "#4A6FA5" : "transparent",
+                  color: n <= today.water ? theme.paper : theme.muted,
+                  fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.15s",
+                }}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sleep */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Sleep (hours)
+            </div>
+            <input
+              type="number" step="0.5" min="0" max="14"
+              value={today.sleep}
+              onChange={(e) => updateToday({ sleep: e.target.value })}
+              placeholder="e.g. 7.5"
+              style={{
+                fontFamily: base.fontSans, fontSize: 13, padding: "7px 10px", width: 100,
+                border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none",
+              }}
+            />
+          </div>
+
+          {/* Exercise */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Exercise
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <input
+                value={exerciseInput}
+                onChange={(e) => setExerciseInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && exerciseInput.trim()) {
+                    updateToday({ exercise: [...today.exercise, exerciseInput.trim()] });
+                    setExerciseInput("");
+                  }
+                }}
+                placeholder="e.g. 30 min run, yoga..."
+                style={{
+                  flex: 1, fontFamily: base.fontSans, fontSize: 12, padding: "7px 10px",
+                  border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none",
+                }}
+              />
+              <button onClick={() => {
+                if (exerciseInput.trim()) { updateToday({ exercise: [...today.exercise, exerciseInput.trim()] }); setExerciseInput(""); }
+              }} style={{
+                fontFamily: base.fontSans, fontSize: 11, padding: "7px 12px",
+                border: "none", background: theme.teal, color: theme.paper, cursor: "pointer",
+              }}>Add</button>
+            </div>
+            {today.exercise.map((ex, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: `1px solid ${theme.light}` }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.text }}>• {ex}</span>
+                <button onClick={() => updateToday({ exercise: today.exercise.filter((_, j) => j !== i) })} style={{
+                  fontFamily: base.fontSans, fontSize: 13, color: theme.muted, background: "none", border: "none", cursor: "pointer",
+                }}>×</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Meals */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Meals
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <input
+                value={mealInput}
+                onChange={(e) => setMealInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && mealInput.trim()) {
+                    updateToday({ meals: [...today.meals, mealInput.trim()] });
+                    setMealInput("");
+                  }
+                }}
+                placeholder="e.g. porridge, salad, pasta..."
+                style={{
+                  flex: 1, fontFamily: base.fontSans, fontSize: 12, padding: "7px 10px",
+                  border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none",
+                }}
+              />
+              <button onClick={() => {
+                if (mealInput.trim()) { updateToday({ meals: [...today.meals, mealInput.trim()] }); setMealInput(""); }
+              }} style={{
+                fontFamily: base.fontSans, fontSize: 11, padding: "7px 12px",
+                border: "none", background: theme.teal, color: theme.paper, cursor: "pointer",
+              }}>Add</button>
+            </div>
+            {today.meals.map((meal, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: `1px solid ${theme.light}` }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.text }}>• {meal}</span>
+                <button onClick={() => updateToday({ meals: today.meals.filter((_, j) => j !== i) })} style={{
+                  fontFamily: base.fontSans, fontSize: 13, color: theme.muted, background: "none", border: "none", cursor: "pointer",
+                }}>×</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+              Notes
+            </div>
+            <textarea
+              value={today.notes}
+              onChange={(e) => updateToday({ notes: e.target.value })}
+              placeholder="How are you feeling today..."
+              rows={3}
+              style={{
+                width: "100%", fontFamily: base.fontBody, fontSize: 13, lineHeight: 1.6, padding: 10,
+                border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text,
+                outline: "none", resize: "vertical", boxSizing: "border-box",
+              }}
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Right: Weekly Overview ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Card title="This Week — Water">
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100 }}>
+            {weekDays.map((d) => (
+              <div key={d.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{d.water > 0 ? d.water : ""}</span>
+                <div style={{
+                  width: "100%", background: d.isToday ? "#4A6FA5" : "#4A6FA5",
+                  height: `${Math.max((d.water / 8) * 70, d.water > 0 ? 4 : 0)}px`,
+                  borderRadius: "2px 2px 0 0", opacity: d.isToday ? 1 : 0.5,
+                }} />
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, fontWeight: d.isToday ? 600 : 400 }}>{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="This Week — Sleep">
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100 }}>
+            {weekDays.map((d) => (
+              <div key={d.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{d.sleep > 0 ? `${d.sleep}h` : ""}</span>
+                <div style={{
+                  width: "100%", background: d.isToday ? theme.teal : theme.teal,
+                  height: `${Math.max((d.sleep / 10) * 70, d.sleep > 0 ? 4 : 0)}px`,
+                  borderRadius: "2px 2px 0 0", opacity: d.isToday ? 1 : 0.5,
+                }} />
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, fontWeight: d.isToday ? 600 : 400 }}>{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Activity Summary">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {weekDays.filter((d) => d.exerciseCount > 0 || d.mealCount > 0).reverse().slice(0, 5).map((d) => (
+              <div key={d.key} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${theme.light}` }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.text, fontWeight: d.isToday ? 600 : 400 }}>{d.label}</span>
+                <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+                  {d.exerciseCount} exercise · {d.mealCount} meals
+                </span>
+              </div>
+            ))}
+            {weekDays.every((d) => d.exerciseCount === 0 && d.mealCount === 0) && (
+              <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: 10 }}>
+                Start tracking to see your week here.
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ─── LIFE PAGE ─── */
+function LifePage({ wisdom, setWisdom }) {
+  const removeWisdom = (id) => setWisdom((prev) => prev.filter((w) => w.id !== id));
+
+  // Group by energy level
+  const grouped = {};
+  ENERGY_LEVELS.forEach((lvl) => {
+    grouped[lvl.value] = wisdom.filter((w) => w.energy === lvl.value);
+  });
+
+  return (
+    <div style={{ padding: 20, maxWidth: 750, margin: "0 auto" }}>
+      <h2 style={{ fontFamily: base.fontSerif, fontSize: 28, fontWeight: 700, color: theme.dark, margin: "0 0 4px" }}>Life</h2>
+      <p style={{ fontFamily: base.fontBody, fontSize: 14, color: theme.muted, margin: "0 0 20px", fontStyle: "italic" }}>
+        Words of wisdom, tagged by energy level. Add them via "Write it down → For Life" on the Home page.
+      </p>
+
+      {wisdom.length === 0 ? (
+        <Card>
+          <p style={{ fontFamily: base.fontBody, fontStyle: "italic", color: theme.muted, fontSize: 14, textAlign: "center", margin: 0 }}>
+            No words of wisdom yet. Use "For Life" on the Home page to save one.
+          </p>
+        </Card>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {ENERGY_LEVELS.map((lvl) => {
+            const items = grouped[lvl.value];
+            if (!items || items.length === 0) return null;
+            return (
+              <Card key={lvl.value} title={`${lvl.label} (${items.length})`} style={{ borderLeft: `3px solid ${lvl.color}` }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {items.map((w, i) => (
+                    <div key={w.id} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
+                      padding: "10px 0",
+                      borderBottom: i < items.length - 1 ? `1px solid ${theme.light}` : "none",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: base.fontBody, fontSize: 15, color: theme.text, fontStyle: "italic", lineHeight: 1.5 }}>
+                          "{w.text}"
+                        </div>
+                        <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 4 }}>
+                          {new Date(w.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {new Date(w.date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeWisdom(w.id)}
+                        style={{
+                          fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
+                          border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0,
+                        }}
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── MAIN APP ─── */
+function App() {
+  const [page, setPage] = useState("Home");
+  const [sessions, setSessions, sessionsLoaded] = usePersistedState("daily-brief:sessions", []);
+  const [journalEntries, setJournalEntries, journalLoaded] = usePersistedState("daily-brief:journal", []);
+  const [writedowns, setWritedowns, writedownsLoaded] = usePersistedState("daily-brief:writedowns", []);
+  const [wisdom, setWisdom, wisdomLoaded] = usePersistedState("daily-brief:wisdom", []);
+
+  // Arrow key tab navigation
+  useEffect(() => {
+    const handleKey = (e) => {
+      // Don't navigate if user is typing in an input/textarea
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setPage((prev) => {
+          const idx = PAGES.indexOf(prev);
+          if (e.key === "ArrowLeft") return PAGES[(idx - 1 + PAGES.length) % PAGES.length];
+          return PAGES[(idx + 1) % PAGES.length];
+        });
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  if (!sessionsLoaded || !journalLoaded || !writedownsLoaded || !wisdomLoaded) {
+    return (
+      <div style={{ minHeight: "100vh", background: theme.salmon, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 20, color: theme.muted, fontStyle: "italic" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <link href={FONT_LINK} rel="stylesheet" />
+      <style dangerouslySetInnerHTML={{ __html: `
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #EDE3D0; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #B8A88A; border-radius: 4px; min-height: 30px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8B7D6B; }
+        * { scrollbar-width: thin; scrollbar-color: #B8A88A #EDE3D0; }
+      `}} />
+      <div style={{
+        minHeight: "100vh", background: theme.salmon, color: theme.text,
+        fontFamily: base.fontBody,
+      }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+          <Masthead page={page} setPage={setPage} entries={journalEntries} />
+          <main>
+            <div style={{ display: page === "Home" ? "block" : "none" }}>
+              <FrontPage sessions={sessions} setPage={setPage} writedowns={writedowns} setWritedowns={setWritedowns} wisdom={wisdom} setWisdom={setWisdom} />
+            </div>
+            <div style={{ display: page === "Journal" ? "block" : "none" }}>
+              <JournalPage entries={journalEntries} setEntries={setJournalEntries} writedowns={writedowns} setWritedowns={setWritedowns} wisdom={wisdom} />
+            </div>
+            <div style={{ display: page === "Study" ? "block" : "none" }}>
+              <StudyPage sessions={sessions} setSessions={setSessions} />
+            </div>
+            <div style={{ display: page === "News" ? "block" : "none" }}>
+              <NewsPage />
+            </div>
+            <div style={{ display: page === "Commercial" ? "block" : "none" }}>
+              <CommercialPage />
+            </div>
+            <div style={{ display: page === "Media" ? "block" : "none" }}>
+              <RecommendationsPage />
+            </div>
+            <div style={{ display: page === "Social" ? "block" : "none" }}>
+              <SocialPage />
+            </div>
+            <div style={{ display: page === "Health" ? "block" : "none" }}>
+              <HealthPage />
+            </div>
+            <div style={{ display: page === "Life" ? "block" : "none" }}>
+              <LifePage wisdom={wisdom} setWisdom={setWisdom} />
+            </div>
+          </main>
+          <footer style={{
+            textAlign: "center", padding: "20px", borderTop: `1px solid ${theme.border}`,
+            fontFamily: base.fontSans, fontSize: 10, color: theme.muted, letterSpacing: 0.5,
+          }}>
+            IO DOT FARM — {new Date().getFullYear()}
+          </footer>
+        </div>
+      </div>
+    </>
+  );
+}
+
+const root=ReactDOM.createRoot(document.getElementById("root"));root.render(<App />);
+</script></body></html>
