@@ -22,7 +22,7 @@ function usePersistedState(key, defaultValue) {
 }
 
 /* ─── Constants ─── */
-const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Art", "Health", "Life"];
+const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Art", "Health", "Games"];
 const WEATHER = {
   current: { temp: 14, condition: "Sunny", icon: "☀️" },
   forecast: [
@@ -188,7 +188,7 @@ function useRssFeeds(feeds) {
         if (doc.querySelector("parsererror")) return [];
         let items = [...doc.querySelectorAll("item")];
         if (items.length === 0) items = [...doc.querySelectorAll("entry")];
-        return items.slice(0, 25).map((item) => {
+        return items.slice(0, 40).map((item) => {
           const getText = (tags) => {
             for (const tag of tags) {
               const el = item.querySelector(tag);
@@ -251,13 +251,11 @@ function useRssFeeds(feeds) {
     }
 
     async function fetchFeedRaw(rssUrl) {
-      // 1: Direct
-      try { const r = await tryFetch(rssUrl, 1500); if (r.ok) { const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } } catch {}
-      // 2: rss2json (best for YouTube)
+      // 1: rss2json (fastest, works for most feeds)
       try {
         const r = await tryFetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`, 8000);
         const d = await r.json();
-        if (d.status === "ok" && d.items?.length > 0) return d.items.slice(0, 25).map((item) => {
+        if (d.status === "ok" && d.items?.length > 0) return d.items.slice(0, 40).map((item) => {
           let img = item.thumbnail || item.enclosure?.link || "";
           // YouTube: extract thumbnail from video link
           if (!img && item.link) {
@@ -285,7 +283,7 @@ function useRssFeeds(feeds) {
 
     // Cached + deduplicated fetch
     async function fetchFeed(rssUrl) {
-      if (_rssCache[rssUrl] && Date.now() - _rssCache[rssUrl].time < 300000) return _rssCache[rssUrl].data;
+      if (_rssCache[rssUrl] && Date.now() - _rssCache[rssUrl].time < 120000) return _rssCache[rssUrl].data;
       if (_rssPending[rssUrl]) return _rssPending[rssUrl];
       const promise = fetchFeedRaw(rssUrl).then((data) => { _rssCache[rssUrl] = { data, time: Date.now() }; delete _rssPending[rssUrl]; return data; });
       _rssPending[rssUrl] = promise;
@@ -310,7 +308,7 @@ function useRssFeeds(feeds) {
     fetchAll();
     // Force loading to false after 10s even if fetches haven't completed (sandbox protection)
     const loadingTimeout = setTimeout(() => { if (!cancelled) setLoading(false); }, 20000);
-    const interval = setInterval(fetchAll, 10 * 60 * 1000);
+    const interval = setInterval(fetchAll, 5 * 60 * 1000);
     return () => { cancelled = true; clearInterval(interval); clearTimeout(loadingTimeout); };
   }, []);
 
@@ -885,7 +883,7 @@ function HomeFeed() {
         const r = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`);
         const d = await r.json();
         if (!cancelled && d.status === "ok" && d.items?.length > 0) {
-          setItems(d.items.slice(0, 25).map((item) => ({
+          setItems(d.items.slice(0, 40).map((item) => ({
             title: item.title || "", link: item.link || "", pubDate: item.pubDate || "",
             description: (item.description || "").replace(/<[^>]*>/g, "").slice(0, 140),
           })));
@@ -902,7 +900,7 @@ function HomeFeed() {
           const doc = parser.parseFromString(json.contents, "text/xml");
           const entries = [...doc.querySelectorAll("item")];
           if (entries.length > 0) {
-            setItems(entries.slice(0, 25).map((item) => ({
+            setItems(entries.slice(0, 40).map((item) => ({
               title: item.querySelector("title")?.textContent?.trim() || "",
               link: item.querySelector("link")?.textContent?.trim() || "",
               pubDate: item.querySelector("pubDate")?.textContent?.trim() || "",
@@ -922,7 +920,7 @@ function HomeFeed() {
           const doc = parser.parseFromString(xml, "text/xml");
           const entries = [...doc.querySelectorAll("item")];
           if (entries.length > 0) {
-            setItems(entries.slice(0, 25).map((item) => ({
+            setItems(entries.slice(0, 40).map((item) => ({
               title: item.querySelector("title")?.textContent?.trim() || "",
               link: item.querySelector("link")?.textContent?.trim() || "",
               pubDate: item.querySelector("pubDate")?.textContent?.trim() || "",
@@ -937,7 +935,7 @@ function HomeFeed() {
     }
 
     fetchNews();
-    const interval = setInterval(fetchNews, 10 * 60 * 1000);
+    const interval = setInterval(fetchNews, 5 * 60 * 1000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
@@ -1099,8 +1097,8 @@ function FrontPage({ sessions, setPage, writedowns, setWritedowns, wisdom, setWi
               <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
                 {wisdom.length} wisdom · <span
                   style={{ color: "#9B8EC4", cursor: "pointer", textDecoration: "underline" }}
-                  onClick={() => setPage("Life")}
-                >life</span>
+                  onClick={() => setPage("Journal")}
+                >journal</span>
               </span>
             )}
           </div>
@@ -2302,7 +2300,7 @@ function EnergyGraph({ entries }) {
 }
 
 /* ─── JOURNAL PAGE ─── */
-function JournalPage({ entries, setEntries, writedowns, setWritedowns, wisdom }) {
+function JournalPage({ entries, setEntries, writedowns, setWritedowns, wisdom, setWisdom }) {
   const [body, setBody] = useState("");
   const [tag, setTag] = useState("");
   const [energy, setEnergy] = useState(3);
@@ -2564,6 +2562,56 @@ function JournalPage({ entries, setEntries, writedowns, setWritedowns, wisdom })
                   </div>
                   <button
                     onClick={() => setWritedowns((prev) => prev.filter((x) => x.id !== w.id))}
+                    style={{
+                      fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
+                      border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <div style={{ borderTop: `1px solid ${theme.border}` }} />
+            </div>
+          </div>
+        )}
+
+        {/* Words of Wisdom */}
+        {wisdom.length > 0 && (
+          <div>
+            <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{
+                fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: 1.5, color: "#9B8EC4",
+              }}>
+                Words of Wisdom
+              </span>
+              <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>
+                ({wisdom.length})
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {wisdom.map((w) => (
+                <div
+                  key={w.id}
+                  style={{
+                    padding: "10px 12px",
+                    background: theme.paper,
+                    border: `1px solid ${theme.border}`, borderBottom: "none",
+                    borderLeft: `3px solid ${w.energyColor || "#9B8EC4"}`,
+                    display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.text, lineHeight: 1.4, fontStyle: "italic" }}>
+                      "{w.text}"
+                    </div>
+                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 3 }}>
+                      {new Date(w.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setWisdom((prev) => prev.filter((x) => x.id !== w.id))}
                     style={{
                       fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
                       border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0,
@@ -3611,7 +3659,7 @@ function ArtPage() {
     const doc = parser.parseFromString(text.trim(), "text/xml");
     let items = [...doc.querySelectorAll("item")];
     if (items.length === 0) items = [...doc.querySelectorAll("entry")];
-    return items.slice(0, 25).map((item) => {
+    return items.slice(0, 40).map((item) => {
       const getText = (tags) => { for (const t of tags) { const el = item.querySelector(t); if (el?.textContent?.trim()) return el.textContent.trim(); } return ""; };
       const getLink = () => { const el = item.querySelector("link"); return el?.getAttribute("href") || el?.textContent?.trim() || ""; };
       const descHtml = item.querySelector("description")?.textContent || item.querySelector("summary")?.textContent || "";
@@ -4228,63 +4276,64 @@ function HealthPage() {
 }
 
 /* ─── LIFE PAGE ─── */
-function LifePage({ wisdom, setWisdom }) {
-  const removeWisdom = (id) => setWisdom((prev) => prev.filter((w) => w.id !== id));
+/* ─── GAMES PAGE ─── */
+function GamesPage() {
+  const [activeGame, setActiveGame] = useState(null);
 
-  // Group by energy level
-  const grouped = {};
-  ENERGY_LEVELS.forEach((lvl) => {
-    grouped[lvl.value] = wisdom.filter((w) => w.energy === lvl.value);
-  });
+  const GAMES = [
+    { id: "flags", name: "Flag Guesser", desc: "Guess the flags of the world", url: "https://world-geography-games.com/en/flags_world.html", icon: "🏴" },
+  ];
 
   return (
-    <div style={{ padding: 20, maxWidth: 750, margin: "0 auto" }}>
-      <h2 style={{ fontFamily: base.fontSerif, fontSize: 28, fontWeight: 700, color: theme.dark, margin: "0 0 4px" }}>Life</h2>
-      <p style={{ fontFamily: base.fontBody, fontSize: 14, color: theme.muted, margin: "0 0 20px", fontStyle: "italic" }}>
-        Words of wisdom, tagged by energy level. Add them via "Write it down → For Life" on the Home page.
-      </p>
-
-      {wisdom.length === 0 ? (
-        <Card>
-          <p style={{ fontFamily: base.fontBody, fontStyle: "italic", color: theme.muted, fontSize: 14, textAlign: "center", margin: 0 }}>
-            No words of wisdom yet. Use "For Life" on the Home page to save one.
-          </p>
-        </Card>
+    <div style={{ padding: 20 }}>
+      {!activeGame ? (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <span style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson }}>Games</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+            {GAMES.map((game) => (
+              <div key={game.id} onClick={() => setActiveGame(game)} style={{
+                background: theme.paper, border: `1px solid ${theme.border}`, padding: "20px 16px",
+                cursor: "pointer", transition: "all 0.15s", borderTop: `3px solid ${theme.crimson}`,
+              }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = theme.paper; }}
+              >
+                <div style={{ fontSize: 28, marginBottom: 8 }}>{game.icon}</div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark, marginBottom: 4 }}>{game.name}</div>
+                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>{game.desc}</div>
+              </div>
+            ))}
+            {/* Placeholder slots */}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={`empty-${i}`} style={{
+                background: theme.light, border: `1px dashed ${theme.border}`, padding: "20px 16px",
+                display: "flex", alignItems: "center", justifyContent: "center", minHeight: 100, opacity: 0.4,
+              }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>Coming soon</span>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {ENERGY_LEVELS.map((lvl) => {
-            const items = grouped[lvl.value];
-            if (!items || items.length === 0) return null;
-            return (
-              <Card key={lvl.value} title={`${lvl.label} (${items.length})`} style={{ borderLeft: `3px solid ${lvl.color}` }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {items.map((w, i) => (
-                    <div key={w.id} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10,
-                      padding: "10px 0",
-                      borderBottom: i < items.length - 1 ? `1px solid ${theme.light}` : "none",
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: base.fontBody, fontSize: 15, color: theme.text, fontStyle: "italic", lineHeight: 1.5 }}>
-                          "{w.text}"
-                        </div>
-                        <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 4 }}>
-                          {new Date(w.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {new Date(w.date).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeWisdom(w.id)}
-                        style={{
-                          fontFamily: base.fontSans, fontSize: 14, color: theme.muted, background: "none",
-                          border: "none", cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0,
-                        }}
-                      >×</button>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <button onClick={() => setActiveGame(null)} style={{
+              fontFamily: base.fontSans, fontSize: 11, padding: "5px 12px",
+              border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text,
+              cursor: "pointer", borderRadius: 2,
+            }}>← Back</button>
+            <span style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark }}>{activeGame.icon} {activeGame.name}</span>
+          </div>
+          <div style={{ width: "100%", height: "calc(100vh - 160px)", border: `1px solid ${theme.border}`, background: theme.paper, overflow: "hidden" }}>
+            <iframe
+              src={activeGame.url}
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title={activeGame.name}
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+          </div>
         </div>
       )}
     </div>
@@ -4347,7 +4396,7 @@ function App() {
               <FrontPage sessions={sessions} setPage={setPage} writedowns={writedowns} setWritedowns={setWritedowns} wisdom={wisdom} setWisdom={setWisdom} />
             </div>
             <div style={{ display: page === "Journal" ? "block" : "none" }}>
-              <JournalPage entries={journalEntries} setEntries={setJournalEntries} writedowns={writedowns} setWritedowns={setWritedowns} wisdom={wisdom} />
+              <JournalPage entries={journalEntries} setEntries={setJournalEntries} writedowns={writedowns} setWritedowns={setWritedowns} wisdom={wisdom} setWisdom={setWisdom} />
             </div>
             <div style={{ display: page === "Study" ? "block" : "none" }}>
               <StudyPage sessions={sessions} setSessions={setSessions} />
@@ -4370,8 +4419,8 @@ function App() {
             <div style={{ display: page === "Health" ? "block" : "none" }}>
               <HealthPage />
             </div>
-            <div style={{ display: page === "Life" ? "block" : "none" }}>
-              <LifePage wisdom={wisdom} setWisdom={setWisdom} />
+            <div style={{ display: page === "Games" ? "block" : "none" }}>
+              <GamesPage />
             </div>
           </main>
           <footer style={{
