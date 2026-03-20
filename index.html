@@ -22,7 +22,7 @@ function usePersistedState(key, defaultValue) {
 }
 
 /* ─── Constants ─── */
-const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Health", "Life"];
+const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Art", "Health", "Life"];
 const WEATHER = {
   current: { temp: 14, condition: "Sunny", icon: "☀️" },
   forecast: [
@@ -259,7 +259,7 @@ function useRssFeeds(feeds) {
 
     async function fetchFeedRaw(rssUrl) {
       // 1: Direct
-      try { const r = await tryFetch(rssUrl, 3000); if (r.ok) { const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } } catch {}
+      try { const r = await tryFetch(rssUrl, 1500); if (r.ok) { const xml = await r.text(); const p = parseRssXml(xml); if (p.length > 0) return p; } } catch {}
       // 2: rss2json (best for YouTube)
       try {
         const r = await tryFetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`, 8000);
@@ -1988,9 +1988,9 @@ function Broadstream() {
   return (
     <Card title="Broadstream" accent>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", background: theme.dark, marginBottom: 10, border: `1px solid ${theme.border}` }}>
+        <div style={{ position: "relative", width: "100%", paddingBottom: "62%", background: theme.dark, marginBottom: 10, border: `1px solid ${theme.border}` }}>
           <iframe
-            src={`https://www.youtube.com/embed/${activeChannel.yt}?autoplay=1&controls=0&mute=1`}
+            src={`https://www.youtube.com/embed/${activeChannel.yt}?autoplay=1&controls=1&mute=0`}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
@@ -2042,7 +2042,7 @@ function NewsPage() {
   const { articles, loading } = useRssFeeds(RSS_FEEDS);
 
   return (
-    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2.5fr)", gap: 16, alignItems: "start" }}>
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 2fr)", gap: 16, alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Broadstream */}
         <Broadstream />
@@ -2390,7 +2390,7 @@ function JournalPage({ entries, setEntries, writedowns, setWritedowns, wisdom })
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: 16, padding: 20, alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)", gap: 16, padding: 20, alignItems: "start" }}>
       {/* ── LEFT: Compose + Selected Entry ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Compose */}
@@ -3348,15 +3348,14 @@ function SocialPage() {
                       onMouseEnter={(e) => { e.currentTarget.style.background = theme.light; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = theme.salmon; }}
                     >
-                      {item.image ? (
+                      {item.image && (
                         <img referrerPolicy="no-referrer" src={item.image} alt="" style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 2, marginBottom: 6, background: theme.light }}
                           onError={(e) => { e.target.style.display = "none"; }} />
-                      ) : (
-                        <div style={{ width: "100%", height: 90, background: theme.light, borderRadius: 2, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>Local</span>
-                        </div>
                       )}
                       <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.text, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.title}</div>
+                      {!item.image && item.description && (
+                        <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, marginTop: 3, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.description}</div>
+                      )}
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                         <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted }}>{item.accountName}</span>
                         <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
@@ -3394,15 +3393,14 @@ function SocialPage() {
                       onMouseEnter={(e) => { e.currentTarget.style.background = theme.light; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = theme.salmon; }}
                     >
-                      {item.image ? (
+                      {item.image && (
                         <img referrerPolicy="no-referrer" src={item.image} alt="" style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 2, marginBottom: 6, background: theme.light }}
                           onError={(e) => { e.target.style.display = "none"; }} />
-                      ) : (
-                        <div style={{ width: "100%", height: 90, background: theme.light, borderRadius: 2, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>Event</span>
-                        </div>
                       )}
                       <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 500, color: theme.text, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.title}</div>
+                      {!item.image && item.description && (
+                        <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted, marginTop: 3, lineHeight: 1.3, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{item.description}</div>
+                      )}
                       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
                         <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.muted }}>{item.accountName}</span>
                         <span style={{ fontFamily: base.fontSans, fontSize: 8, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
@@ -3471,6 +3469,405 @@ function SocialPage() {
               )}
             </div>
           );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ART PAGE ─── */
+const C52_WEEKS = [
+  { month: "Perspective and Construction", tasks: [
+    "100 boxes and 50 cylinders",
+    "100 cut boxes, 50 cut cylinders and 50 silhouette boxes",
+    "50 people constructed from boxes and cylinders",
+    "25 faces or skulls constructed from boxes and cylinders",
+    "25 hands and 25 feet constructed from boxes and cylinders",
+  ]},
+  { month: "Visual Coordination", tasks: [
+    "20 faces and 20 reflections",
+    "20 copied images and 10 silhouettes",
+    "10 point of view drawings from life",
+    "20 drawings referenced from Kim Jung Gi",
+  ]},
+  { month: "Anatomy", tasks: [
+    "25 torso studies",
+    "10 hands, 10 arms, 10 heads studies",
+    "10 feet, 10 legs and 10 hips studies",
+    "25 fat studies",
+  ]},
+  { month: "Gesture", tasks: [
+    "20 × 1 minute gestures and 20 paper gestures",
+    "20 × 1 minute gestures and 20 paper gestures",
+    "20 × 1 minute gestures and 20 paper gestures",
+    "10 × 2 minute gestures and 10 paper gestures",
+    "10 × 2 minute gestures and 10 paper gestures",
+  ]},
+  { month: "Shapes and Lines", tasks: [
+    "3 pages of controlled lines",
+    "25 shape strong faces and 25 distilled bubbles",
+    "25 pants and 25 shirts",
+    "25 shape strong people",
+  ]},
+  { month: "Animals", tasks: [
+    "Choose 3 animals — 10 gesture studies each (set A)",
+    "Choose 3 animals — 10 construction studies each (set A)",
+    "Choose 3 animals — 10 gesture studies each (set B)",
+    "Choose 3 animals — 10 construction studies each (set B)",
+  ]},
+  { month: "Composition", tasks: [
+    "Reference 3 movie scenes — describe in detail",
+    "Reference 3 master paintings — describe in detail",
+    "Sketch 3 scenes from imagination — describe feeling",
+    "Reference 3 movie scenes — describe in detail",
+    "Sketch 3 scenes from imagination — describe feeling",
+  ]},
+  { month: "Environments", tasks: [
+    "10 referenced environments from images",
+    "10 European, 10 East Asian, 10 Wild Western studies",
+    "10 furniture studies and 10 tree studies",
+    "10 referenced environments from life",
+  ]},
+  { month: "Visual Library (Machines)", tasks: [
+    "100 cut boxes",
+    "10 cars and 10 motorcycles",
+    "10 boats, 10 planes",
+    "10 trains, 10 mech studies",
+  ]},
+  { month: "Visual Library (Clothes & Props)", tasks: [
+    "10 clothes relating to a hot climate",
+    "10 clothes relating to a cold climate",
+    "10 weapons and 10 accessories",
+    "10 boots, 10 gloves, 10 headwear pieces",
+    "10 armor studies",
+  ]},
+  { month: "Painting (Values)", tasks: [
+    "10 references at a 2 value distillation",
+    "10 refs at 3 value distillation, 5 painted boxes & cylinders",
+    "5 faces at 2 value and 5 faces at 3 value distillation",
+    "3 references painted in grayscale",
+  ]},
+  { month: "Colour & Final", tasks: [
+    "10 painted references using 5 colours",
+    "Create 10 colour palettes containing 5 colours each",
+    "4 painted references in colour",
+    "Create a finalized coloured illustration",
+  ]},
+];
+
+function getC52Week() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const diff = now - start;
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  return Math.min(Math.ceil(diff / oneWeek), 52);
+}
+
+function getC52Task(weekNum) {
+  let w = 0;
+  for (const block of C52_WEEKS) {
+    for (const task of block.tasks) {
+      w++;
+      if (w === weekNum) return { month: block.month, task, week: w };
+    }
+  }
+  return { month: "Complete", task: "You finished C52!", week: weekNum };
+}
+
+function ArtPage() {
+  const [inspFeeds, setInspFeeds, loaded] = usePersistedState("daily-brief:art-inspiration", []);
+  const [ytFeeds, setYtFeeds, ytLoaded] = usePersistedState("daily-brief:art-youtube", []);
+  const [feedName, setFeedName] = useState("");
+  const [feedUrl, setFeedUrl] = useState("");
+  const [ytName, setYtName] = useState("");
+  const [ytUrl, setYtUrl] = useState("");
+  const inspFileRef = useRef(null);
+  const ytFileRef = useRef(null);
+  const [dragOverInsp, setDragOverInsp] = useState(false);
+  const [dragOverYt, setDragOverYt] = useState(false);
+  const [inspExpand, setInspExpand] = useState(false);
+  const [ytExpand, setYtExpand] = useState(false);
+  const pinRef = useRef(null);
+
+  // Load Pinterest widget script
+  useEffect(() => {
+    if (!document.getElementById("pin-script")) {
+      const s = document.createElement("script");
+      s.id = "pin-script";
+      s.async = true;
+      s.src = "https://assets.pinterest.com/js/pinit.js";
+      s.setAttribute("data-pin-build", "doBuild");
+      document.body.appendChild(s);
+    } else if (window.doBuild) {
+      window.doBuild();
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => { if (window.doBuild) window.doBuild(); }, 500);
+    return () => clearTimeout(timer);
+  });
+
+  const allInspFeeds = inspFeeds.filter((f) => f.url).map((f) => ({ name: f.name, rss: f.url, color: theme.muted }));
+  const allYtFeeds = ytFeeds.filter((f) => f.url).map((f) => ({ name: f.name, rss: f.url, color: theme.muted }));
+  const { articles: inspArticles, loading: inspLoading } = useRssFeeds(allInspFeeds.length > 0 ? allInspFeeds : []);
+  const { articles: ytArticles, loading: ytLoading } = useRssFeeds(allYtFeeds.length > 0 ? allYtFeeds : []);
+
+  const parseFileToArticles = (text) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text.trim(), "text/xml");
+    let items = [...doc.querySelectorAll("item")];
+    if (items.length === 0) items = [...doc.querySelectorAll("entry")];
+    return items.slice(0, 25).map((item) => {
+      const getText = (tags) => { for (const t of tags) { const el = item.querySelector(t); if (el?.textContent?.trim()) return el.textContent.trim(); } return ""; };
+      const getLink = () => { const el = item.querySelector("link"); return el?.getAttribute("href") || el?.textContent?.trim() || ""; };
+      const descHtml = item.querySelector("description")?.textContent || item.querySelector("summary")?.textContent || "";
+      const imgMatch = descHtml.match(/<img[^>]+src=["']([^"']+)/);
+      const allEls = item.getElementsByTagName("*");
+      let mediaImg = "";
+      for (let j = 0; j < allEls.length; j++) {
+        const ln = (allEls[j].localName || allEls[j].tagName || "").toLowerCase();
+        if ((ln === "thumbnail" || ln === "content") && allEls[j].getAttribute("url")) { mediaImg = allEls[j].getAttribute("url"); break; }
+      }
+      const linkText = getText(["link"]) || getLink();
+      const ytm = linkText.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      const ytThumb = ytm ? "https://i.ytimg.com/vi/" + ytm[1] + "/mqdefault.jpg" : "";
+      return {
+        title: getText(["title"]), link: linkText,
+        pubDate: getText(["pubDate", "published", "updated"]),
+        description: descHtml.replace(/<[^>]*>/g, "").slice(0, 140),
+        image: mediaImg || (imgMatch ? imgMatch[1] : "") || ytThumb || "",
+      };
+    }).filter((a) => a.title);
+  };
+
+  const addInspFeed = () => {
+    if (!feedName.trim() || !feedUrl.trim()) return;
+    setInspFeeds((prev) => [...prev, { id: Date.now(), name: feedName.trim(), url: feedUrl.trim(), source: "url" }]);
+    setFeedName(""); setFeedUrl("");
+  };
+  const addYtFeed = () => {
+    if (!ytName.trim() || !ytUrl.trim()) return;
+    setYtFeeds((prev) => [...prev, { id: Date.now(), name: ytName.trim(), url: ytUrl.trim(), source: "url" }]);
+    setYtName(""); setYtUrl("");
+  };
+
+  const handleFileDrop = (e, setter, nameFallback) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    file.text().then((text) => {
+      const parsed = parseFileToArticles(text);
+      const name = nameFallback || file.name.replace(/\.\w+$/, "");
+      if (parsed.length > 0) setter((prev) => [...prev, { id: Date.now(), name, source: "file", fileArticles: parsed }]);
+    });
+  };
+
+  const handleFileInput = (e, setter, nameFallback) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    file.text().then((text) => {
+      const parsed = parseFileToArticles(text);
+      const name = nameFallback || file.name.replace(/\.\w+$/, "");
+      if (parsed.length > 0) setter((prev) => [...prev, { id: Date.now(), name, source: "file", fileArticles: parsed }]);
+    });
+    e.target.value = "";
+  };
+
+  const removeInspFeed = (id) => setInspFeeds((prev) => prev.filter((f) => f.id !== id));
+  const removeYtFeed = (id) => setYtFeeds((prev) => prev.filter((f) => f.id !== id));
+
+  const mergeArticles = (feeds, articlesMap) => {
+    const all = [];
+    feeds.forEach((feed) => {
+      if (feed.source === "file" && feed.fileArticles) {
+        feed.fileArticles.forEach((item) => all.push({ ...item, source: feed.name }));
+      } else {
+        (articlesMap[feed.name] || []).forEach((item) => all.push({ ...item, source: feed.name }));
+      }
+    });
+    all.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+    return all;
+  };
+
+  const allInspArticles = mergeArticles(inspFeeds, inspArticles);
+  const allYtArticlesList = mergeArticles(ytFeeds, ytArticles);
+
+  const weekNum = getC52Week();
+  const c52 = getC52Task(weekNum);
+
+  const renderFeedColumn = ({ title, feeds, arts, ld, nameVal, setNameVal, urlVal, setUrlVal, addFn, removeFn, fileRef, onFileInput, dragOver, setDragOver, onDrop, expandKey }) => {
+    const expanded = expandKey === "inspExpand" ? inspExpand : ytExpand;
+    const setExpanded = expandKey === "inspExpand" ? setInspExpand : setYtExpand;
+    return (
+    <Card style={{ padding: 0 }}>
+      {/* Clickable title */}
+      <div onClick={() => setExpanded(!expanded)} style={{
+        fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+        letterSpacing: 1.5, color: theme.crimson, padding: "14px 20px 10px", cursor: "pointer",
+        borderTop: `3px solid ${theme.crimson}`, borderBottom: `1px solid ${theme.light}`,
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        {title}
+        <span style={{ fontSize: 10, color: theme.muted, fontWeight: 400 }}>{expanded ? "▲" : "▼"}</span>
+      </div>
+
+      {/* Collapsible upload section */}
+      {expanded && (
+        <div style={{ padding: "10px 20px", borderBottom: `1px solid ${theme.light}`, display: "flex", flexDirection: "column", gap: 6 }}>
+          <input value={nameVal} onChange={(e) => setNameVal(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addFn(); }}
+            placeholder="Name"
+            style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+          <div style={{ display: "flex", gap: 4 }}>
+            <input value={urlVal} onChange={(e) => setUrlVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addFn(); }}
+              placeholder="RSS URL"
+              style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+            <button onClick={addFn} style={{
+              fontFamily: base.fontSans, fontSize: 10, padding: "5px 10px",
+              border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+              opacity: nameVal.trim() && urlVal.trim() ? 1 : 0.4,
+            }}>Add</button>
+          </div>
+          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={(e) => onFileInput(e)} />
+          <div
+            onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { setDragOver(false); onDrop(e); }}
+            style={{
+              fontFamily: base.fontSans, fontSize: 10, padding: "10px 0", textAlign: "center",
+              border: `2px dashed ${dragOver ? theme.crimson : theme.border}`,
+              background: dragOver ? theme.light : theme.salmon, color: theme.muted,
+              cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3, transition: "all 0.15s",
+            }}>Drop file or click to upload</div>
+          {feeds.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
+              {feeds.map((f) => (
+                <span key={f.id} style={{
+                  fontFamily: base.fontSans, fontSize: 9, padding: "2px 8px",
+                  background: theme.light, color: theme.text, borderRadius: 2,
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                }}>
+                  {f.name}
+                  <span onClick={() => removeFn(f.id)} style={{ cursor: "pointer", color: theme.muted, fontWeight: 700 }}>×</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Feed chips when collapsed */}
+      {!expanded && feeds.length > 0 && (
+        <div style={{ padding: "6px 20px", display: "flex", flexWrap: "wrap", gap: 3 }}>
+          {feeds.map((f) => (
+            <span key={f.id} style={{ fontFamily: base.fontSans, fontSize: 8, padding: "1px 6px", background: theme.light, color: theme.muted, borderRadius: 2 }}>{f.name}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Articles with full-width images */}
+      <div style={{ maxHeight: 750, overflowY: "auto", padding: "0 16px 16px" }}>
+        {feeds.length === 0 ? (
+          <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
+            Click title to add feeds.
+          </div>
+        ) : ld && arts.length === 0 ? (
+          <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>Loading...</div>
+        ) : arts.length === 0 ? (
+          <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>No posts found</div>
+        ) : (
+          arts.slice(0, 30).map((item, i) => (
+            <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+              display: "block", textDecoration: "none", marginTop: 10,
+              paddingBottom: 10, borderBottom: `1px solid ${theme.light}`,
+            }}>
+              {item.image && (
+                <img referrerPolicy="no-referrer" src={item.image} alt="" style={{
+                  width: "100%", objectFit: "contain", borderRadius: 2,
+                  marginBottom: 6, background: theme.light, display: "block",
+                }} onError={(e) => { e.target.style.display = "none"; }} />
+              )}
+              <div style={{ fontFamily: base.fontSans, fontSize: 12, fontWeight: 500, color: theme.text, lineHeight: 1.3 }}>{item.title}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{item.source}</span>
+                <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
+              </div>
+            </a>
+          ))
+        )}
+      </div>
+    </Card>
+    );
+  };
+
+  return (
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)", gap: 14, alignItems: "start" }}>
+      {/* Col 1: C52 + Gallery */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Card accent>
+          <div style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson, marginBottom: 4 }}>
+            C52 Week {weekNum}
+          </div>
+          <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, marginBottom: 8 }}>{c52.month}</div>
+          <div style={{ fontFamily: base.fontSerif, fontSize: 16, fontWeight: 700, color: theme.dark, lineHeight: 1.35 }}>
+            {c52.task}
+          </div>
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, height: 6, background: theme.light, borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ width: `${(weekNum / 52) * 100}%`, height: "100%", background: theme.crimson, borderRadius: 3 }} />
+            </div>
+            <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{weekNum}/52</span>
+          </div>
+        </Card>
+        <Card title="Gallery">
+          <div style={{ width: "100%", height: 500, border: `1px solid ${theme.border}`, overflow: "hidden" }}>
+            <iframe loading="lazy" src="https://dad.gallery/users/7748/submissions"
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title="Gallery" sandbox="allow-scripts allow-same-origin allow-popups" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Col 2: Twitter Art */}
+      <div>
+        {renderFeedColumn({
+          title: "Twitter Art", feeds: inspFeeds, arts: allInspArticles, ld: inspLoading,
+          nameVal: feedName, setNameVal: setFeedName, urlVal: feedUrl, setUrlVal: setFeedUrl,
+          addFn: addInspFeed, removeFn: removeInspFeed, fileRef: inspFileRef,
+          onFileInput: (e) => handleFileInput(e, setInspFeeds, feedName.trim()),
+          dragOver: dragOverInsp, setDragOver: setDragOverInsp,
+          onDrop: (e) => handleFileDrop(e, setInspFeeds, feedName.trim()),
+          expandKey: "inspExpand",
+        })}
+      </div>
+
+      {/* Col 3: Pinterest Board Widget */}
+      <div>
+        <Card title="Pinterest" accent>
+          <div ref={pinRef} style={{ maxHeight: 850, overflowY: "auto" }}>
+            <a data-pin-do="embedBoard"
+              href="https://www.pinterest.com/owmybaroquendick/art-that-gets-me-loading-up-clip-studio-at-3am/"
+              data-pin-scale-width="180"
+              data-pin-scale-height="900"
+              data-pin-board-width="280"
+            ></a>
+          </div>
+        </Card>
+      </div>
+
+      {/* Col 4: YouTube Art */}
+      <div>
+        {renderFeedColumn({
+          title: "YouTube Art", feeds: ytFeeds, arts: allYtArticlesList, ld: ytLoading,
+          nameVal: ytName, setNameVal: setYtName, urlVal: ytUrl, setUrlVal: setYtUrl,
+          addFn: addYtFeed, removeFn: removeYtFeed, fileRef: ytFileRef,
+          onFileInput: (e) => handleFileInput(e, setYtFeeds, ytName.trim()),
+          dragOver: dragOverYt, setDragOver: setDragOverYt,
+          onDrop: (e) => handleFileDrop(e, setYtFeeds, ytName.trim()),
+          expandKey: "ytExpand",
         })}
       </div>
     </div>
@@ -3849,6 +4246,9 @@ function App() {
             </div>
             <div style={{ display: page === "Social" ? "block" : "none" }}>
               <SocialPage />
+            </div>
+            <div style={{ display: page === "Art" ? "block" : "none" }}>
+              <ArtPage />
             </div>
             <div style={{ display: page === "Health" ? "block" : "none" }}>
               <HealthPage />
