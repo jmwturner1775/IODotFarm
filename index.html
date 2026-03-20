@@ -1,23 +1,21 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<title>IO Dot Farm</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{-webkit-font-smoothing:antialiased}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#EDE3D0;border-radius:4px}::-webkit-scrollbar-thumb{background:#B8A88A;border-radius:4px;min-height:30px}::-webkit-scrollbar-thumb:hover{background:#8B7D6B}*{scrollbar-width:thin;scrollbar-color:#B8A88A #EDE3D0}input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}input[type="number"]{-moz-appearance:textfield}</style>
-</head><body><div id="root"></div><script type="text/babel">
-const { useState, useEffect, useRef, useCallback } = React;
+import { useState, useEffect, useRef, useCallback } from "react";
 
-/* ─── Persistence Hook (localStorage) ─── */
+/* ─── Persistence Hook ─── */
 function usePersistedState(key, defaultValue) {
-  const [state, setState] = useState(() => {
-    try { const stored = localStorage.getItem(key); return stored ? JSON.parse(stored) : defaultValue; } catch { return defaultValue; }
-  });
-  const [loaded] = useState(true);
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [state, key]);
+  const [state, setState] = useState(defaultValue);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get(key);
+        if (r && r.value) setState(JSON.parse(r.value));
+      } catch {}
+      setLoaded(true);
+    })();
+  }, []);
+  useEffect(() => {
+    if (loaded) window.storage.set(key, JSON.stringify(state)).catch(() => {});
+  }, [state, loaded]);
   return [state, setState, loaded];
 }
 
@@ -90,29 +88,22 @@ function Masthead({ page, setPage, entries }) {
   }
 
   return (
-    <header style={{ borderBottom: `1px solid ${theme.dark}`, padding: "16px 0 0", marginBottom: 0, background: theme.salmon }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", position: "relative" }}>
-        {/* Mood face — top left */}
-        <div style={{ position: "absolute", left: 24, top: "50%", transform: "translateY(-50%)" }}>
+    <header style={{ borderBottom: `1px solid ${theme.dark}`, marginBottom: 0, background: theme.salmon }}>
+      {/* Top bar: title left, date center, mood+weather right */}
+      <div style={{ display: "flex", alignItems: "center", padding: "8px 20px", gap: 12 }}>
+        <h1 style={{ fontFamily: base.fontSerif, fontSize: 20, fontWeight: 900, color: theme.dark, letterSpacing: -0.5, lineHeight: 1, margin: 0, flexShrink: 0 }}>
+          IO Dot Farm
+        </h1>
+        <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", flex: 1 }}>
+          {dateStr}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           {moodFace && (
-            <span style={{ fontFamily: base.fontSans, fontSize: 22, color: moodFace.color, fontWeight: 700 }}>
+            <span style={{ fontFamily: base.fontSans, fontSize: 16, color: moodFace.color, fontWeight: 700 }}>
               {moodFace.face}
             </span>
           )}
-        </div>
-        <div style={{ textAlign: "center" }}>
-          <h1 style={{ fontFamily: base.fontSerif, fontSize: "clamp(22px, 3.5vw, 34px)", fontWeight: 900, color: theme.dark, margin: "4px 0", letterSpacing: -1, lineHeight: 1 }}>
-            IO Dot Farm
-          </h1>
-          <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", marginBottom: 12 }}>
-            {dateStr}
-          </div>
-        </div>
-        {/* Weather — top right */}
-        <div style={{
-          position: "absolute", right: 24, top: "50%", transform: "translateY(-50%)",
-        }} title={`${WEATHER.current.temp}°C — ${WEATHER.current.condition}`}>
-          <span style={{ fontSize: 24, lineHeight: 1 }}>{WEATHER.current.icon}</span>
+          <span style={{ fontSize: 18, lineHeight: 1 }} title={`${WEATHER.current.temp}°C — ${WEATHER.current.condition}`}>{WEATHER.current.icon}</span>
         </div>
       </div>
       <nav style={{ display: "flex", gap: 0, borderTop: `1px solid ${theme.border}`, overflow: "auto", alignItems: "center" }}>
@@ -122,9 +113,9 @@ function Masthead({ page, setPage, entries }) {
             onClick={() => setPage(p)}
             style={{
               flex: 1,
-              padding: "10px 12px",
+              padding: "8px 10px",
               fontFamily: base.fontSans,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: page === p ? 600 : 400,
               color: page === p ? theme.crimson : theme.text,
               background: page === p ? theme.paper : "transparent",
@@ -3079,7 +3070,7 @@ function RecommendationsPage() {
 }
 
 /* ─── SOCIAL PAGE ─── */
-const SOCIAL_TAGS = ["X", "Youtube", "Reddit", "Pinterest", "Local", "Events"];
+const SOCIAL_TAGS = ["X", "Youtube", "Reddit", "Local", "Events"];
 
 function SocialPage() {
   const [accounts, setAccounts, loaded] = usePersistedState("daily-brief:social-accounts", []);
@@ -3103,11 +3094,6 @@ function SocialPage() {
       defaults.push(
         { id: Date.now(), name: "r/cambridge_uni", url: "https://www.reddit.com/r/cambridge_uni/.rss", tag: "Reddit", source: "url" },
         { id: Date.now() + 1, name: "r/cambridge", url: "https://www.reddit.com/r/cambridge/.rss", tag: "Reddit", source: "url" },
-      );
-    }
-    if (!accounts.some((a) => a.tag === "Pinterest")) {
-      defaults.push(
-        { id: Date.now() + 2, name: "Pinterest", url: "https://www.pinterest.com/owmybaroquendick/feed.rss", tag: "Pinterest", source: "url" },
       );
     }
     if (defaults.length > 0) setAccounts((prev) => [...prev, ...defaults]);
@@ -3237,7 +3223,7 @@ function SocialPage() {
       )}
 
       {/* Grid: Add Feed left, IRL banner top-right, feed columns bottom-right */}
-      <div style={{ display: "grid", gridTemplateColumns: "200px repeat(4, minmax(0, 1fr))", gridTemplateRows: "auto auto 1fr", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "200px repeat(3, minmax(0, 1fr))", gridTemplateRows: "auto auto 1fr", gap: 16, alignItems: "start" }}>
         {/* ── Left: Add Feed (spans all rows) ── */}
         <div style={{ gridRow: "1 / 4" }}>
           <Card accent>
@@ -3324,7 +3310,7 @@ function SocialPage() {
         </div>
 
         {/* ── Local News banner (spans columns 2-6, row 1) ── */}
-        <div style={{ gridColumn: "2 / 6" }}>
+        <div style={{ gridColumn: "2 / 5" }}>
           <Card title="Local News" accent style={{ padding: "14px 20px 0" }}>
             {(() => {
               const localAccounts = accounts.filter((a) => a.tag === "Local");
@@ -3369,7 +3355,7 @@ function SocialPage() {
         </div>
 
         {/* ── Events for You banner (spans columns 2-6, row 2) ── */}
-        <div style={{ gridColumn: "2 / 6" }}>
+        <div style={{ gridColumn: "2 / 5" }}>
           <Card title="Events for You" accent style={{ padding: "14px 20px 0" }}>
             {(() => {
               const eventsAccounts = accounts.filter((a) => a.tag === "Events");
@@ -3587,6 +3573,11 @@ function ArtPage() {
   const [dragOverYt, setDragOverYt] = useState(false);
   const [inspExpand, setInspExpand] = useState(false);
   const [ytExpand, setYtExpand] = useState(false);
+  const [artIdeas, setArtIdeas, artIdeasLoaded] = usePersistedState("daily-brief:art-ideas", []);
+  const [ideaInput, setIdeaInput] = useState("");
+  const [ideaImages, setIdeaImages] = useState([]);
+  const [ideasExpand, setIdeasExpand] = useState(false);
+  const ideaFileRef = useRef(null);
   const pinRef = useRef(null);
 
   // Load Pinterest widget script
@@ -3822,11 +3813,135 @@ function ArtPage() {
             <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{weekNum}/52</span>
           </div>
         </Card>
-        <Card title="Gallery">
-          <div style={{ width: "100%", height: 500, border: `1px solid ${theme.border}`, overflow: "hidden" }}>
-            <iframe loading="lazy" src="https://dad.gallery/users/7748/submissions"
-              style={{ width: "100%", height: "100%", border: "none" }}
-              title="Gallery" sandbox="allow-scripts allow-same-origin allow-popups" />
+        <Card style={{ padding: 0 }}>
+          {/* Clickable title */}
+          <div onClick={() => setIdeasExpand(!ideasExpand)} style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: 1.5, color: theme.crimson, padding: "14px 20px 10px", cursor: "pointer",
+            borderBottom: `1px solid ${theme.light}`,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            Art Ideas
+            <span style={{ fontSize: 10, color: theme.muted, fontWeight: 400 }}>{ideasExpand ? "▲" : "▼"}</span>
+          </div>
+
+          {/* Collapsible input */}
+          {ideasExpand && (
+            <div style={{ padding: "10px 20px", borderBottom: `1px solid ${theme.light}` }}>
+              <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                <input value={ideaInput} onChange={(e) => setIdeaInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (ideaInput.trim() || ideaImages.length > 0)) {
+                      setArtIdeas((prev) => [{ id: Date.now(), text: ideaInput.trim(), images: ideaImages, done: false }, ...prev]);
+                      setIdeaInput(""); setIdeaImages([]);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.startsWith("image/")) {
+                        e.preventDefault();
+                        const file = items[i].getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = () => setIdeaImages((prev) => [...prev, reader.result]);
+                        reader.readAsDataURL(file);
+                      }
+                    }
+                  }}
+                  placeholder="Sketch idea, concept, prompt..."
+                  style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+                <button onClick={() => {
+                  if (ideaInput.trim() || ideaImages.length > 0) {
+                    setArtIdeas((prev) => [{ id: Date.now(), text: ideaInput.trim(), images: ideaImages, done: false }, ...prev]);
+                    setIdeaInput(""); setIdeaImages([]);
+                  }
+                }} style={{
+                  fontFamily: base.fontSans, fontSize: 10, padding: "5px 10px",
+                  border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+                  opacity: (ideaInput.trim() || ideaImages.length > 0) ? 1 : 0.4,
+                }}>Add</button>
+              </div>
+              {/* Image drop zone + file input */}
+              <input ref={ideaFileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => {
+                [...(e.target.files || [])].forEach((file) => {
+                  const reader = new FileReader();
+                  reader.onload = () => setIdeaImages((prev) => [...prev, reader.result]);
+                  reader.readAsDataURL(file);
+                });
+                e.target.value = "";
+              }} />
+              <div
+                onClick={(e) => { e.stopPropagation(); ideaFileRef.current?.click(); }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  [...(e.dataTransfer?.files || [])].forEach((file) => {
+                    if (file.type.startsWith("image/")) {
+                      const reader = new FileReader();
+                      reader.onload = () => setIdeaImages((prev) => [...prev, reader.result]);
+                      reader.readAsDataURL(file);
+                    }
+                  });
+                }}
+                style={{
+                  fontFamily: base.fontSans, fontSize: 9, padding: "8px 0", textAlign: "center",
+                  border: `1px dashed ${theme.border}`, background: theme.salmon, color: theme.muted,
+                  cursor: "pointer", letterSpacing: 0.3, transition: "all 0.15s",
+                }}>Drop, paste, or click to add images</div>
+              {/* Image preview */}
+              {ideaImages.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                  {ideaImages.map((img, i) => (
+                    <div key={i} style={{ position: "relative" }}>
+                      <img src={img} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 2, border: `1px solid ${theme.border}` }} />
+                      <button onClick={() => setIdeaImages((prev) => prev.filter((_, j) => j !== i))} style={{
+                        position: "absolute", top: -4, right: -4, width: 14, height: 14, borderRadius: "50%",
+                        background: theme.crimson, color: theme.paper, border: "none", cursor: "pointer",
+                        fontSize: 9, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Ideas list */}
+          <div style={{ maxHeight: 450, overflowY: "auto", padding: "6px 16px 16px" }}>
+            {artIdeas.length === 0 ? (
+              <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
+                Click title to add ideas.
+              </div>
+            ) : (
+              artIdeas.map((idea) => (
+                <div key={idea.id} style={{
+                  padding: "6px 0", borderBottom: `1px solid ${theme.light}`,
+                  opacity: idea.done ? 0.4 : 1,
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                    <input type="checkbox" checked={idea.done || false}
+                      onChange={() => setArtIdeas((prev) => prev.map((i) => i.id === idea.id ? { ...i, done: !i.done } : i))}
+                      style={{ marginTop: 3, accentColor: theme.crimson, flexShrink: 0 }} />
+                    <div style={{
+                      fontFamily: base.fontSans, fontSize: 12, color: theme.text, lineHeight: 1.4, flex: 1,
+                      textDecoration: idea.done ? "line-through" : "none",
+                    }}>{idea.text || "(image only)"}</div>
+                    <button onClick={() => setArtIdeas((prev) => prev.filter((i) => i.id !== idea.id))} style={{
+                      fontSize: 11, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1, flexShrink: 0,
+                    }}>×</button>
+                  </div>
+                  {idea.images && idea.images.length > 0 && (
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4, marginLeft: 22 }}>
+                      {idea.images.map((img, i) => (
+                        <img key={i} src={img} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 2, border: `1px solid ${theme.border}`, cursor: "pointer" }}
+                          onClick={() => window.open(img, "_blank")} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </div>
@@ -3846,13 +3961,13 @@ function ArtPage() {
 
       {/* Col 3: Pinterest Board Widget */}
       <div>
-        <Card title="Pinterest" accent>
+        <Card title="Pinterest" accent style={{ padding: "14px 10px" }}>
           <div ref={pinRef} style={{ maxHeight: 850, overflowY: "auto" }}>
             <a data-pin-do="embedBoard"
               href="https://www.pinterest.com/owmybaroquendick/art-that-gets-me-loading-up-clip-studio-at-3am/"
-              data-pin-scale-width="180"
+              data-pin-scale-width="115"
               data-pin-scale-height="900"
-              data-pin-board-width="280"
+              data-pin-board-width="260"
             ></a>
           </div>
         </Card>
@@ -4175,7 +4290,7 @@ function LifePage({ wisdom, setWisdom }) {
 }
 
 /* ─── MAIN APP ─── */
-function App() {
+export default function App() {
   const [page, setPage] = useState("Home");
   const [sessions, setSessions, sessionsLoaded] = usePersistedState("daily-brief:sessions", []);
   const [journalEntries, setJournalEntries, journalLoaded] = usePersistedState("daily-brief:journal", []);
@@ -4268,6 +4383,3 @@ function App() {
     </>
   );
 }
-
-const root=ReactDOM.createRoot(document.getElementById("root"));root.render(<App />);
-</script></body></html>
