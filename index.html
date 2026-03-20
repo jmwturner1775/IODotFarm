@@ -22,7 +22,7 @@ function usePersistedState(key, defaultValue) {
 }
 
 /* ─── Constants ─── */
-const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Art", "Health", "Games"];
+const PAGES = ["Home", "Journal", "Study", "News", "Social", "Commercial", "Media", "Art", "Histopolic", "Health"];
 const WEATHER = {
   current: { temp: 14, condition: "Sunny", icon: "☀️" },
   forecast: [
@@ -2874,119 +2874,114 @@ function CommercialPage() {
   const [feeds, setFeeds, loaded] = usePersistedState("daily-brief:commercial-feeds", []);
   const [nameInput, setNameInput] = useState("");
   const [urlInput, setUrlInput] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const comFileRef = useRef(null);
 
-  const rssFeeds = feeds.map((f) => ({ name: f.name, rss: f.url, color: theme.muted }));
+  const rssFeeds = feeds.filter((f) => f.url).map((f) => ({ name: f.name, rss: f.url, color: theme.muted }));
   const { articles, loading } = useRssFeeds(rssFeeds.length > 0 ? rssFeeds : []);
 
   const addFeed = () => {
     if (!nameInput.trim() || !urlInput.trim()) return;
-    setFeeds((prev) => [...prev, { id: Date.now(), name: nameInput.trim(), url: urlInput.trim() }]);
+    setFeeds((prev) => [...prev, { id: Date.now(), name: nameInput.trim(), url: urlInput.trim(), source: "url" }]);
     setNameInput(""); setUrlInput("");
   };
-
   const removeFeed = (id) => setFeeds((prev) => prev.filter((f) => f.id !== id));
 
-  // Merge all articles chronologically
+  const handleFile = (file) => {
+    file.text().then((text) => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(text.trim(), "text/xml");
+      let items = [...doc.querySelectorAll("item")];
+      if (items.length === 0) items = [...doc.querySelectorAll("entry")];
+      const parsed = items.slice(0, 40).map((item) => {
+        const getText = (tags) => { for (const t of tags) { const el = item.querySelector(t); if (el?.textContent?.trim()) return el.textContent.trim(); } return ""; };
+        return { title: getText(["title"]), link: getText(["link"]) || (item.querySelector("link")?.getAttribute("href") || ""), pubDate: getText(["pubDate", "published"]), description: getText(["description", "summary"]).replace(/<[^>]*>/g, "").slice(0, 140) };
+      }).filter((a) => a.title);
+      if (parsed.length > 0) setFeeds((prev) => [...prev, { id: Date.now(), name: nameInput.trim() || file.name.replace(/\.[^.]+$/, ""), source: "file", fileArticles: parsed }]);
+      setNameInput("");
+    });
+  };
+
   const allItems = [];
   feeds.forEach((feed) => {
-    (articles[feed.name] || []).forEach((item) => allItems.push({ ...item, source: feed.name }));
+    if (feed.source === "file" && feed.fileArticles) {
+      feed.fileArticles.forEach((item) => allItems.push({ ...item, source: feed.name }));
+    } else {
+      (articles[feed.name] || []).forEach((item) => allItems.push({ ...item, source: feed.name }));
+    }
   });
-  allItems.sort((a, b) => {
-    const da = a.pubDate ? new Date(a.pubDate).getTime() : 0;
-    const db = b.pubDate ? new Date(b.pubDate).getTime() : 0;
-    return db - da;
-  });
+  allItems.sort((a, b) => (b.pubDate ? new Date(b.pubDate).getTime() : 0) - (a.pubDate ? new Date(a.pubDate).getTime() : 0));
 
   if (!loaded) return null;
 
   return (
     <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
-      {/* Left: LinkedIn Jobs */}
       <div>
         <Card title="Job Listings" accent>
           <div style={{ width: "100%", height: 700, border: `1px solid ${theme.border}`, overflow: "hidden", position: "relative" }}>
-            <iframe
-              loading="lazy"
-              src="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&originalSubdomain=uk&refresh=true"
-              style={{ width: "100%", height: "100%", border: "none" }}
-              title="LinkedIn Jobs" referrerPolicy="no-referrer"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
+            <iframe loading="lazy" src="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&originalSubdomain=uk&refresh=true"
+              style={{ width: "100%", height: "100%", border: "none" }} title="LinkedIn Jobs" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />
             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px 12px", background: theme.salmon, borderTop: `1px solid ${theme.border}` }}>
-              <a href="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate&origin=JOB_SEARCH_PAGE_SEARCH_BUTTON&originalSubdomain=uk&refresh=true"
-                target="_blank" rel="noopener noreferrer" style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.teal }}>
-                Open in LinkedIn ↗
-              </a>
+              <a href="https://www.linkedin.com/jobs/search/?currentJobId=4360439454&geoId=101165590&keywords=Real%20Estate" target="_blank" rel="noopener noreferrer" style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.teal }}>Open in LinkedIn ↗</a>
             </div>
           </div>
         </Card>
       </div>
-
-      {/* Right: Commercial Awareness */}
       <div>
-        <Card title="Commercial Awareness" accent>
-          {/* Add feed form */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }} placeholder="Name"
-              style={{ width: 100, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
-            <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }}
-              placeholder="RSS feed URL"
-              style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
-            <button onClick={addFeed} style={{
-              fontFamily: base.fontSans, fontSize: 10, fontWeight: 600, padding: "6px 12px",
-              border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
-              textTransform: "uppercase", letterSpacing: 0.5,
-              opacity: nameInput.trim() && urlInput.trim() ? 1 : 0.4,
-            }}>Add</button>
-          </div>
-
-          {/* Feed chips */}
+        <Card style={{ padding: 0 }}>
+          <div onClick={() => setExpanded(!expanded)} style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: 1.5, color: theme.crimson, padding: "14px 20px 10px", cursor: "pointer",
+            borderTop: `3px solid ${theme.crimson}`, borderBottom: `1px solid ${theme.light}`,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>Commercial Awareness <span style={{ fontSize: 10, color: theme.muted, fontWeight: 400 }}>{expanded ? "▲" : "▼"}</span></div>
+          {expanded && (
+            <div style={{ padding: "10px 20px", borderBottom: `1px solid ${theme.light}`, display: "flex", flexDirection: "column", gap: 6 }}>
+              <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }} placeholder="Name"
+                style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 4 }}>
+                <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addFeed(); }} placeholder="RSS URL"
+                  style={{ flex: 1, fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+                <button onClick={addFeed} style={{ fontFamily: base.fontSans, fontSize: 10, padding: "5px 10px", border: "none", background: theme.dark, color: theme.paper, cursor: "pointer", opacity: nameInput.trim() && urlInput.trim() ? 1 : 0.4 }}>Add</button>
+              </div>
+              <input ref={comFileRef} type="file" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
+              <div onClick={(e) => { e.stopPropagation(); comFileRef.current?.click(); }}
+                onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) handleFile(f); }}
+                style={{ fontFamily: base.fontSans, fontSize: 10, padding: "10px 0", textAlign: "center", border: `2px dashed ${theme.border}`, background: theme.salmon, color: theme.muted, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                Drop file or click to upload</div>
+            </div>
+          )}
           {feeds.length > 0 && (
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${theme.light}` }}>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "8px 20px", borderBottom: `1px solid ${theme.light}` }}>
               {feeds.map((f) => (
-                <div key={f.id} style={{
-                  display: "flex", alignItems: "center", gap: 3, padding: "2px 8px",
-                  background: theme.light, fontFamily: base.fontSans, fontSize: 10, color: theme.text, borderRadius: 2,
-                }}>
-                  <span style={{ fontWeight: 500 }}>{f.name}</span>
-                  <button onClick={() => removeFeed(f.id)} style={{ fontSize: 11, color: theme.muted, background: "none", border: "none", cursor: "pointer", lineHeight: 1 }}>×</button>
-                </div>
+                <span key={f.id} style={{ fontFamily: base.fontSans, fontSize: 9, padding: "2px 8px", background: theme.light, color: theme.text, borderRadius: 2, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: theme.teal, cursor: "pointer", textDecoration: "underline dotted" }} onClick={() => {
+                    if (f.url) { navigator.clipboard.writeText(f.url).then(() => { const el = document.getElementById(`com-${f.id}`); if (el) { el.textContent = "Copied!"; setTimeout(() => { el.textContent = f.name; }, 1000); } }); }
+                  }} id={`com-${f.id}`}>{f.name}</span>
+                  <span onClick={() => removeFeed(f.id)} style={{ cursor: "pointer", color: theme.muted, fontWeight: 700 }}>×</span>
+                </span>
               ))}
             </div>
           )}
-
-          {/* Articles */}
-          {feeds.length === 0 ? (
-            <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
-              Add RSS feeds above to see commercial property news here.
-            </div>
-          ) : loading ? (
-            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic", padding: 14 }}>Fetching feeds...</div>
-          ) : allItems.length === 0 ? (
-            <div style={{ fontFamily: base.fontSans, fontSize: 12, color: theme.muted, fontStyle: "italic", padding: 14 }}>No articles found.</div>
-          ) : (
-            <div style={{ maxHeight: 580, overflowY: "auto" }}>
-              {allItems.slice(0, 30).map((item, i) => (
-                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
-                  display: "block", padding: "8px 4px", textDecoration: "none",
-                  borderBottom: `1px solid ${theme.light}`, transition: "background 0.15s",
-                }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                >
+          <div style={{ maxHeight: 600, overflowY: "auto", padding: "0 16px 16px" }}>
+            {feeds.length === 0 ? (
+              <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>Click title to add feeds.</div>
+            ) : loading && allItems.length === 0 ? (
+              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>Loading...</div>
+            ) : (
+              allItems.slice(0, 40).map((item, i) => (
+                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "8px 4px", textDecoration: "none", borderBottom: `1px solid ${theme.light}`, transition: "background 0.15s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                   <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.text, lineHeight: 1.35 }}>{item.title}</div>
-                  {item.description && (
-                    <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>
-                  )}
+                  {item.description && <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>}
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
                     <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.muted }}>{item.source}</span>
                     <span style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal }}>{timeAgo(item.pubDate)}</span>
                   </div>
                 </a>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </Card>
       </div>
     </div>
@@ -2994,7 +2989,10 @@ function CommercialPage() {
 }
 
 const AUCTORIAL_FEED = [{ name: "Auctorial", rss: "https://auctorial.com/users/el-GgbDATq-gR2a9H_cERg%3D%3D/feed", color: "#7A6B8E" }];
-const ARTICLES_FEEDS = [{ name: "Literary Hub", rss: "https://lithub.com/feed/", color: "#5B7A6A" }];
+const ARTICLES_FEEDS = [
+  { name: "Literary Hub", rss: "https://lithub.com/feed/", color: "#5B7A6A" },
+  { name: "Newsletter", rss: "https://kill-the-newsletter.com/feeds/vzn5hmex6w34y6j46yca.xml", color: "#C49A6C" },
+];
 
 const RECS = [
   {
@@ -3083,7 +3081,12 @@ function RecommendationsPage() {
           <RssFeedList items={authorArticles["Auctorial"]} loading={authorsLoading} emptyMsg="No new posts from your authors." />
         </Card>
         <Card title="Articles" accent>
-          <RssFeedList items={articlesData["Literary Hub"]} loading={articlesLoading} emptyMsg="No new articles." />
+          {(() => {
+            const merged = [];
+            ARTICLES_FEEDS.forEach((f) => (articlesData[f.name] || []).forEach((item) => merged.push({ ...item, source: f.name })));
+            merged.sort((a, b) => (b.pubDate ? new Date(b.pubDate).getTime() : 0) - (a.pubDate ? new Date(a.pubDate).getTime() : 0));
+            return <RssFeedList items={merged} loading={articlesLoading} emptyMsg="No new articles." />;
+          })()}
         </Card>
       </div>
 
@@ -3791,7 +3794,9 @@ function ArtPage() {
                   background: theme.light, color: theme.text, borderRadius: 2,
                   display: "inline-flex", alignItems: "center", gap: 4,
                 }}>
-                  {f.name}
+                  <span id={`art-${f.id}`} style={{ color: theme.teal, cursor: "pointer", textDecoration: "underline dotted" }} onClick={() => {
+                    if (f.url) { navigator.clipboard.writeText(f.url).then(() => { const el = document.getElementById(`art-${f.id}`); if (el) { el.textContent = "Copied!"; setTimeout(() => { el.textContent = f.name; }, 1000); } }); }
+                  }}>{f.name}</span>
                   <span onClick={() => removeFn(f.id)} style={{ cursor: "pointer", color: theme.muted, fontWeight: 700 }}>×</span>
                 </span>
               ))}
@@ -4275,67 +4280,98 @@ function HealthPage() {
   );
 }
 
-/* ─── LIFE PAGE ─── */
-/* ─── GAMES PAGE ─── */
-function GamesPage() {
+/* ─── HISTOPOLIC PAGE ─── */
+const OTD_FEED = [{ name: "On This Day", rss: "https://kill-the-newsletter.com/feeds/k5m32dz863q0m4mvr84z.xml", color: "#8B3A3A" }];
+
+function HistopolicPage() {
+  const { articles: otdArticles, loading: otdLoading } = useRssFeeds(OTD_FEED);
   const [activeGame, setActiveGame] = useState(null);
+
+  const otdItems = otdArticles["On This Day"] || [];
 
   const GAMES = [
     { id: "flags", name: "Flag Guesser", desc: "Guess the flags of the world", url: "https://world-geography-games.com/en/flags_world.html", icon: "🏴" },
   ];
 
   return (
-    <div style={{ padding: 20 }}>
-      {!activeGame ? (
-        <div>
-          <div style={{ marginBottom: 16 }}>
-            <span style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson }}>Games</span>
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 2fr)", gap: 16, alignItems: "start" }}>
+      {/* Left: On This Day */}
+      <div>
+        <Card title="On This Day" accent>
+          <div style={{ maxHeight: 700, overflowY: "auto" }}>
+            {otdLoading && otdItems.length === 0 ? (
+              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>Loading...</div>
+            ) : otdItems.length === 0 ? (
+              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic", padding: 10 }}>No items loaded.</div>
+            ) : (
+              otdItems.slice(0, 30).map((item, i) => (
+                <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                  display: "block", padding: "10px 8px", textDecoration: "none",
+                  borderBottom: `1px solid ${theme.light}`, transition: "background 0.15s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ fontFamily: base.fontBody, fontSize: 13, color: theme.text, lineHeight: 1.4 }}>{item.title}</div>
+                  {item.description && (
+                    <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, marginTop: 3, lineHeight: 1.3 }}>{item.description}</div>
+                  )}
+                  <div style={{ fontFamily: base.fontSans, fontSize: 9, color: theme.teal, marginTop: 4 }}>{timeAgo(item.pubDate)}</div>
+                </a>
+              ))
+            )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
-            {GAMES.map((game) => (
-              <div key={game.id} onClick={() => setActiveGame(game)} style={{
-                background: theme.paper, border: `1px solid ${theme.border}`, padding: "20px 16px",
-                cursor: "pointer", transition: "all 0.15s", borderTop: `3px solid ${theme.crimson}`,
-              }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = theme.paper; }}
-              >
-                <div style={{ fontSize: 28, marginBottom: 8 }}>{game.icon}</div>
-                <div style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark, marginBottom: 4 }}>{game.name}</div>
-                <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>{game.desc}</div>
-              </div>
-            ))}
-            {/* Placeholder slots */}
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={`empty-${i}`} style={{
-                background: theme.light, border: `1px dashed ${theme.border}`, padding: "20px 16px",
-                display: "flex", alignItems: "center", justifyContent: "center", minHeight: 100, opacity: 0.4,
-              }}>
-                <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>Coming soon</span>
-              </div>
-            ))}
+        </Card>
+      </div>
+
+      {/* Right: Games + content */}
+      <div>
+        {!activeGame ? (
+          <div>
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson }}>Activities</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
+              {GAMES.map((game) => (
+                <div key={game.id} onClick={() => setActiveGame(game)} style={{
+                  background: theme.paper, border: `1px solid ${theme.border}`, padding: "20px 16px",
+                  cursor: "pointer", transition: "all 0.15s", borderTop: `3px solid ${theme.crimson}`,
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = theme.paper; }}
+                >
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{game.icon}</div>
+                  <div style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark, marginBottom: 4 }}>{game.name}</div>
+                  <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>{game.desc}</div>
+                </div>
+              ))}
+              {[1, 2, 3].map((i) => (
+                <div key={`empty-${i}`} style={{
+                  background: theme.light, border: `1px dashed ${theme.border}`, padding: "20px 16px",
+                  display: "flex", alignItems: "center", justifyContent: "center", minHeight: 100, opacity: 0.4,
+                }}>
+                  <span style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted }}>Coming soon</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <button onClick={() => setActiveGame(null)} style={{
-              fontFamily: base.fontSans, fontSize: 11, padding: "5px 12px",
-              border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text,
-              cursor: "pointer", borderRadius: 2,
-            }}>← Back</button>
-            <span style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark }}>{activeGame.icon} {activeGame.name}</span>
+        ) : (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <button onClick={() => setActiveGame(null)} style={{
+                fontFamily: base.fontSans, fontSize: 11, padding: "5px 12px",
+                border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text,
+                cursor: "pointer", borderRadius: 2,
+              }}>← Back</button>
+              <span style={{ fontFamily: base.fontSans, fontSize: 14, fontWeight: 600, color: theme.dark }}>{activeGame.icon} {activeGame.name}</span>
+            </div>
+            <div style={{ width: "100%", height: "calc(100vh - 160px)", border: `1px solid ${theme.border}`, background: theme.paper, overflow: "hidden" }}>
+              <iframe src={activeGame.url} style={{ width: "100%", height: "100%", border: "none" }} title={activeGame.name}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />
+            </div>
           </div>
-          <div style={{ width: "100%", height: "calc(100vh - 160px)", border: `1px solid ${theme.border}`, background: theme.paper, overflow: "hidden" }}>
-            <iframe
-              src={activeGame.url}
-              style={{ width: "100%", height: "100%", border: "none" }}
-              title={activeGame.name}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -4419,8 +4455,8 @@ function App() {
             <div style={{ display: page === "Health" ? "block" : "none" }}>
               <HealthPage />
             </div>
-            <div style={{ display: page === "Games" ? "block" : "none" }}>
-              <GamesPage />
+            <div style={{ display: page === "Histopolic" ? "block" : "none" }}>
+              <HistopolicPage />
             </div>
           </main>
           <footer style={{
