@@ -1,21 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>IO Dot Farm</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{-webkit-font-smoothing:antialiased}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#EDE3D0;border-radius:4px}::-webkit-scrollbar-thumb{background:#B8A88A;border-radius:4px;min-height:30px}::-webkit-scrollbar-thumb:hover{background:#8B7D6B}*{scrollbar-width:thin;scrollbar-color:#B8A88A #EDE3D0}input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}input[type="number"]{-moz-appearance:textfield}</style>
+</head><body><div id="root"></div><script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
 
-/* ─── Persistence Hook ─── */
+/* ─── Persistence Hook (localStorage) ─── */
 function usePersistedState(key, defaultValue) {
-  const [state, setState] = useState(defaultValue);
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await window.storage.get(key);
-        if (r && r.value) setState(JSON.parse(r.value));
-      } catch {}
-      setLoaded(true);
-    })();
-  }, []);
-  useEffect(() => {
-    if (loaded) window.storage.set(key, JSON.stringify(state)).catch(() => {});
-  }, [state, loaded]);
+  const [state, setState] = useState(() => {
+    try { const stored = localStorage.getItem(key); return stored ? JSON.parse(stored) : defaultValue; } catch { return defaultValue; }
+  });
+  const [loaded] = useState(true);
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [state, key]);
   return [state, setState, loaded];
 }
 
@@ -4290,7 +4292,7 @@ function LifePage({ wisdom, setWisdom }) {
 }
 
 /* ─── MAIN APP ─── */
-export default function App() {
+function App() {
   const [page, setPage] = useState("Home");
   const [sessions, setSessions, sessionsLoaded] = usePersistedState("daily-brief:sessions", []);
   const [journalEntries, setJournalEntries, journalLoaded] = usePersistedState("daily-brief:journal", []);
@@ -4383,3 +4385,6 @@ export default function App() {
     </>
   );
 }
+
+const root=ReactDOM.createRoot(document.getElementById("root"));root.render(<App />);
+</script></body></html>
