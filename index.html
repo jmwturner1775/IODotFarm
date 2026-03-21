@@ -1943,164 +1943,71 @@ function StudyPage({ sessions, setSessions }) {
 
 /* ─── BROADSTREAM ─── */
 const BROADCAST_CHANNELS = [
-  { name: "BBC", yt: "bqvibt0wAZo" },
-  { name: "Sky News", yt: "YDvsBbKfLPA" },
   { name: "Al Jazeera", yt: "gCNeDWCI0vo" },
+  { name: "Sky News", yt: "YDvsBbKfLPA" },
   { name: "Bloomberg", yt: "iEpJwprxDdk" },
   { name: "NBC", yt: "LzRQCO52BgY" },
   { name: "CBS", yt: "IEFQ2NzZ8H0" },
 ];
 
-const RADIO_STATIONS = [
-  { name: "BBC Radio 4", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_fourfm" },
-  { name: "BBC World Service", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service" },
-  { name: "BBC Radio 1", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_radio_one" },
-  { name: "LBC", url: "https://media-ssl.musicradio.com/LBC" },
-];
-
-function Broadstream() {
-  const [activeChannel, setActiveChannel] = useState(BROADCAST_CHANNELS[0]);
-  const [radioPlaying, setRadioPlaying] = useState(null);
-  const [volume, setVolume] = useState(0.7);
-  const audioRef = useRef(null);
-
-  const playRadio = (station) => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    if (radioPlaying?.name === station.name) { setRadioPlaying(null); return; }
-    const a = new Audio(station.url);
-    a.volume = volume;
-    a.play().catch(() => {});
-    audioRef.current = a;
-    setRadioPlaying(station);
-  };
-
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
-
-  return (
-    <Card title="Broadstream" accent>
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ position: "relative", width: "100%", paddingBottom: "62%", background: theme.dark, marginBottom: 10, border: `1px solid ${theme.border}` }}>
-          <iframe
-            src={`https://www.youtube.com/embed/${activeChannel.yt}?autoplay=1&controls=1&mute=0`}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-          />
-        </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {BROADCAST_CHANNELS.map((ch) => (
-            <button key={ch.name} onClick={() => setActiveChannel(ch)} style={{
-              padding: "5px 10px", cursor: "pointer",
-              border: activeChannel?.name === ch.name ? `2px solid ${theme.crimson}` : `1px solid ${theme.border}`,
-              background: activeChannel?.name === ch.name ? theme.dark : theme.paper,
-              color: activeChannel?.name === ch.name ? theme.paper : theme.text,
-              fontFamily: base.fontSans, fontSize: 10, fontWeight: activeChannel?.name === ch.name ? 600 : 400,
-              borderRadius: 2,
-            }}>{ch.name}</button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Radio</div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-          {RADIO_STATIONS.map((s) => (
-            <button key={s.name} onClick={() => playRadio(s)} style={{
-              padding: "5px 10px", cursor: "pointer",
-              border: radioPlaying?.name === s.name ? `2px solid ${theme.crimson}` : `1px solid ${theme.border}`,
-              background: radioPlaying?.name === s.name ? theme.light : theme.paper,
-              fontFamily: base.fontSans, fontSize: 10, color: theme.text,
-              fontWeight: radioPlaying?.name === s.name ? 600 : 400, borderRadius: 2,
-            }}>
-              {s.name}
-              {radioPlaying?.name === s.name && <span style={{ fontSize: 8, color: theme.crimson, fontWeight: 700, marginLeft: 4 }}>■</span>}
-            </button>
-          ))}
-          {radioPlaying && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-              <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>Vol</span>
-              <input type="range" min="0" max="1" step="0.05" value={volume} onChange={(e) => setVolume(parseFloat(e.target.value))} style={{ width: 60, accentColor: theme.crimson }} />
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 /* ─── NEWS PAGE ─── */
 function NewsPage() {
   const { articles, loading } = useRssFeeds(RSS_FEEDS);
+  const [activeChannel, setActiveChannel] = useState(BROADCAST_CHANNELS[0]);
+  const [muted, setMuted] = useState(true);
+  const [idxSymbol, setIdxSymbol] = useState("OANDA:SPX500USD");
+  const [idxRange, setIdxRange] = useState("6M");
+  const [idxStyle, setIdxStyle] = useState("1"); // 1=candles, 3=area
+  const iframeRef = useRef(null);
+
+  // K key to toggle mute
+  useEffect(() => {
+    const handleKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "k" || e.key === "K") setMuted((prev) => !prev);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  const INDICES = [
+    { label: "S&P 500", sym: "OANDA:SPX500USD" },
+    { label: "FTSE 100", sym: "OANDA:UK100GBP" },
+    { label: "US 10Y", sym: "TVC:US10Y" },
+    { label: "UK 10Y", sym: "TVC:GB10Y" },
+    { label: "NASDAQ", sym: "OANDA:NAS100USD" },
+    { label: "NAREIT", sym: "AMEX:VNQ" },
+  ];
+  const RANGES = [
+    { label: "1m", val: "1" },
+    { label: "30m", val: "30" },
+    { label: "1D", val: "D" },
+    { label: "6M", val: "6M" },
+    { label: "1Y", val: "12M" },
+  ];
+
+  const tvUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tv&symbol=${encodeURIComponent(idxSymbol)}&interval=${idxRange}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=F5E6D0&studies=[]&theme=light&style=${idxStyle}&timezone=Europe%2FLondon&withdateranges=1&showpopupbutton=0&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=&utm_medium=widget&utm_campaign=chart`;
 
   return (
-    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 2fr)", gap: 16, alignItems: "start" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Broadstream */}
-        <Broadstream />
-
-        {/* Top Recommended */}
-        <Card title="Top Recommended">
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {[
-              { title: "BBC News", url: "https://www.bbc.co.uk/news", desc: "UK & World news" },
-              { title: "Reuters", url: "https://www.reuters.com", desc: "Global wire service" },
-              { title: "Financial Times", url: "https://www.ft.com", desc: "Business & finance" },
-              { title: "The Economist", url: "https://www.economist.com", desc: "Analysis & opinion" },
-              { title: "Hacker News", url: "https://news.ycombinator.com", desc: "Tech & startups" },
-              { title: "arXiv", url: "https://arxiv.org", desc: "Academic preprints" },
-              { title: "Nature", url: "https://www.nature.com", desc: "Science research" },
-              { title: "The Guardian", url: "https://www.theguardian.com", desc: "UK news & comment" },
-            ].map((site, i) => (
-              <a
-                key={site.title}
-                href={site.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "9px 12px", textDecoration: "none",
-                  borderBottom: i < 7 ? `1px solid ${theme.light}` : "none",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <div>
-                  <div style={{ fontFamily: base.fontSans, fontSize: 13, fontWeight: 500, color: theme.text }}>{site.title}</div>
-                  <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted }}>{site.desc}</div>
-                </div>
-                <span style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, flexShrink: 0 }}>↗</span>
-              </a>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Right column: Live News — 3 columns in one card ── */}
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.3fr)", gap: 16, alignItems: "start" }}>
+      {/* ── Left column: Live News 3-column card ── */}
       <div>
-        <Card title="Live News" accent>
-          <p style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, margin: "0 0 12px", fontStyle: "italic" }}>
-            RSS feeds — refreshed every 10 minutes.
-          </p>
-
-          {/* 3-column grid: header + articles */}
+        <Card style={{ padding: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "14px 20px 10px", borderTop: `3px solid ${theme.crimson}`, borderBottom: `1px solid ${theme.light}` }}>
+            <span style={{ fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: theme.crimson }}>Live News</span>
+            <span style={{ fontFamily: base.fontBody, fontSize: 10, color: theme.muted, fontStyle: "italic" }}>RSS feeds — refreshed every 5 min</span>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 0 }}>
             {RSS_FEEDS.map((feed, fi) => {
               const feedArticles = articles[feed.name] || [];
               return (
-                <div key={feed.name} style={{
-                  borderLeft: fi > 0 ? `1px solid ${theme.light}` : "none",
-                }}>
-                  {/* Column header */}
+                <div key={feed.name} style={{ borderLeft: fi > 0 ? `1px solid ${theme.light}` : "none" }}>
                   <div style={{
                     fontFamily: base.fontSans, fontSize: 11, fontWeight: 600,
                     textTransform: "uppercase", letterSpacing: 0.5, color: theme.dark,
                     padding: "8px 12px", borderBottom: `2px solid ${feed.color}`,
-                  }}>
-                    {feed.name}
-                  </div>
-
-                  {/* Articles */}
+                  }}>{feed.name}</div>
                   <div style={{ maxHeight: 600, overflowY: "auto" }}>
                     {loading && feedArticles.length === 0 ? (
                       <div style={{ padding: 14, fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic" }}>Loading...</div>
@@ -2108,31 +2015,19 @@ function NewsPage() {
                       <div style={{ padding: 14, fontFamily: base.fontSans, fontSize: 11, color: theme.muted, fontStyle: "italic" }}>No articles loaded</div>
                     ) : (
                       feedArticles.map((item, i) => (
-                        <a
-                          key={i}
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "block", padding: "10px 12px", textDecoration: "none",
-                            borderBottom: `1px solid ${theme.light}`,
-                            transition: "background 0.15s",
-                          }}
+                        <a key={i} href={item.link} target="_blank" rel="noopener noreferrer" style={{
+                          display: "block", padding: "10px 12px", textDecoration: "none",
+                          borderBottom: `1px solid ${theme.light}`, transition: "background 0.15s",
+                        }}
                           onMouseEnter={(e) => { e.currentTarget.style.background = theme.salmon; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <div style={{ fontFamily: base.fontBody, fontSize: 13, fontWeight: 400, color: theme.text, lineHeight: 1.3, marginBottom: 3, wordBreak: "break-word" }}>
-                            {item.title}
-                          </div>
+                          <div style={{ fontFamily: base.fontBody, fontSize: 13, fontWeight: 400, color: theme.text, lineHeight: 1.3, marginBottom: 3, wordBreak: "break-word" }}>{item.title}</div>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                             {item.description && (
-                              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, lineHeight: 1.3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {item.description}
-                              </div>
+                              <div style={{ fontFamily: base.fontSans, fontSize: 11, color: theme.muted, lineHeight: 1.3, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</div>
                             )}
-                            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, whiteSpace: "nowrap", flexShrink: 0 }}>
-                              {timeAgo(item.pubDate)}
-                            </div>
+                            <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.teal, whiteSpace: "nowrap", flexShrink: 0 }}>{timeAgo(item.pubDate)}</div>
                           </div>
                         </a>
                       ))
@@ -2143,6 +2038,90 @@ function NewsPage() {
             })}
           </div>
         </Card>
+      </div>
+
+      {/* ── Right column: Stream + Clock + Index + Recommended ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Broadstream (no title) */}
+        <div style={{ background: theme.paper, border: `1px solid ${theme.border}` }}>
+          <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", background: theme.dark }}>
+            <iframe
+              ref={iframeRef}
+              key={`${activeChannel.yt}-${muted}`}
+              src={`https://www.youtube.com/embed/${activeChannel.yt}?autoplay=1&controls=1&mute=${muted ? 1 : 0}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", padding: "6px 8px", alignItems: "center" }}>
+            {BROADCAST_CHANNELS.map((ch) => (
+              <button key={ch.name} onClick={() => setActiveChannel(ch)} style={{
+                padding: "4px 8px", cursor: "pointer",
+                border: activeChannel?.name === ch.name ? `2px solid ${theme.crimson}` : `1px solid ${theme.border}`,
+                background: activeChannel?.name === ch.name ? theme.dark : theme.paper,
+                color: activeChannel?.name === ch.name ? theme.paper : theme.text,
+                fontFamily: base.fontSans, fontSize: 9, fontWeight: activeChannel?.name === ch.name ? 600 : 400,
+                borderRadius: 2,
+              }}>{ch.name}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Doomsday Clock */}
+        <div style={{
+          background: theme.dark, padding: "10px 16px",
+          border: `1px solid ${theme.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <a href="https://thebulletin.org/doomsday-clock/" target="_blank" rel="noopener noreferrer" style={{
+            fontFamily: base.fontBody, fontSize: 13, fontWeight: 400, color: theme.salmon,
+            letterSpacing: 0.3, textDecoration: "none", fontStyle: "normal",
+          }}>It is 85 seconds to midnight</a>
+        </div>
+
+        {/* Index Tracker */}
+        <div style={{ background: theme.paper, border: `1px solid ${theme.border}`, padding: "8px" }}>
+          <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 6 }}>
+            {INDICES.map((idx) => (
+              <button key={idx.sym} onClick={() => setIdxSymbol(idx.sym)} style={{
+                padding: "3px 6px", cursor: "pointer", fontFamily: base.fontSans, fontSize: 8,
+                border: idxSymbol === idx.sym ? `1px solid ${theme.crimson}` : `1px solid ${theme.border}`,
+                background: idxSymbol === idx.sym ? theme.dark : theme.paper,
+                color: idxSymbol === idx.sym ? theme.paper : theme.text,
+                borderRadius: 2, fontWeight: idxSymbol === idx.sym ? 600 : 400,
+              }}>{idx.label}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 3, marginBottom: 6 }}>
+            {RANGES.map((r) => (
+              <button key={r.val} onClick={() => setIdxRange(r.val)} style={{
+                padding: "2px 6px", cursor: "pointer", fontFamily: base.fontSans, fontSize: 8,
+                border: idxRange === r.val ? `1px solid ${theme.teal}` : `1px solid ${theme.border}`,
+                background: idxRange === r.val ? theme.teal : theme.paper,
+                color: idxRange === r.val ? theme.paper : theme.muted,
+                borderRadius: 2,
+              }}>{r.label}</button>
+            ))}
+            <span style={{ width: 1, background: theme.border, margin: "0 2px" }} />
+            {[{ label: "Candles", v: "1" }, { label: "Area", v: "3" }].map((s) => (
+              <button key={s.v} onClick={() => setIdxStyle(s.v)} style={{
+                padding: "2px 6px", cursor: "pointer", fontFamily: base.fontSans, fontSize: 8,
+                border: idxStyle === s.v ? `1px solid ${theme.teal}` : `1px solid ${theme.border}`,
+                background: idxStyle === s.v ? theme.teal : theme.paper,
+                color: idxStyle === s.v ? theme.paper : theme.muted,
+                borderRadius: 2,
+              }}>{s.label}</button>
+            ))}
+          </div>
+          <div style={{ width: "100%", height: 260, overflow: "hidden" }}>
+            <iframe key={`${idxSymbol}-${idxRange}-${idxStyle}`}
+              src={tvUrl}
+              style={{ width: "100%", height: "100%", border: "none" }}
+              title="Index Tracker" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3627,9 +3606,16 @@ function ArtPage() {
   const [inspExpand, setInspExpand] = useState(false);
   const [ytExpand, setYtExpand] = useState(false);
   const [artIdeas, setArtIdeas, artIdeasLoaded] = usePersistedState("daily-brief:art-ideas", []);
+  const [artCourses, setArtCourses, artCoursesLoaded] = usePersistedState("daily-brief:art-courses", []);
   const [ideaInput, setIdeaInput] = useState("");
   const [ideaImages, setIdeaImages] = useState([]);
   const [ideasExpand, setIdeasExpand] = useState(false);
+  const [coursesExpand, setCoursesExpand] = useState(false);
+  const [courseName, setCourseName] = useState("");
+  const [courseArtist, setCourseArtist] = useState("");
+  const [courseLink, setCourseLink] = useState("");
+  const [courseImage, setCourseImage] = useState("");
+  const courseFileRef = useRef(null);
   const ideaFileRef = useRef(null);
   const pinRef = useRef(null);
 
@@ -3744,7 +3730,7 @@ function ArtPage() {
     const expanded = expandKey === "inspExpand" ? inspExpand : ytExpand;
     const setExpanded = expandKey === "inspExpand" ? setInspExpand : setYtExpand;
     return (
-    <Card style={{ padding: 0 }}>
+    <Card style={{ padding: 0, flex: 1, display: "flex", flexDirection: "column" }}>
       {/* Clickable title */}
       <div onClick={() => setExpanded(!expanded)} style={{
         fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
@@ -3815,7 +3801,7 @@ function ArtPage() {
       )}
 
       {/* Articles with full-width images */}
-      <div style={{ maxHeight: 750, overflowY: "auto", padding: "0 16px 16px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 16px" }}>
         {feeds.length === 0 ? (
           <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
             Click title to add feeds.
@@ -3850,7 +3836,7 @@ function ArtPage() {
   };
 
   return (
-    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)", gap: 14, alignItems: "start" }}>
+    <div style={{ padding: 20, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)", gap: 14, alignItems: "stretch" }}>
       {/* Col 1: C52 + Gallery */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Card accent>
@@ -3999,19 +3985,114 @@ function ArtPage() {
             )}
           </div>
         </Card>
+
+        {/* Art Courses */}
+        <Card style={{ padding: 0 }}>
+          <div onClick={() => setCoursesExpand(!coursesExpand)} style={{
+            fontFamily: base.fontSans, fontSize: 11, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: 1.5, color: theme.crimson, padding: "14px 20px 10px", cursor: "pointer",
+            borderBottom: `1px solid ${theme.light}`,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            Art Courses
+            <span style={{ fontSize: 10, color: theme.muted, fontWeight: 400 }}>{coursesExpand ? "▲" : "▼"}</span>
+          </div>
+          {coursesExpand && (
+            <div onPaste={(e) => {
+              const items = e.clipboardData?.items;
+              if (!items) return;
+              for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith("image/")) {
+                  e.preventDefault();
+                  const file = items[i].getAsFile();
+                  const reader = new FileReader();
+                  reader.onload = () => setCourseImage(reader.result);
+                  reader.readAsDataURL(file);
+                }
+              }
+            }} style={{ padding: "10px 20px", borderBottom: `1px solid ${theme.light}`, display: "flex", flexDirection: "column", gap: 6 }}>
+              <input value={courseName} onChange={(e) => setCourseName(e.target.value)} placeholder="Course name"
+                style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              <input value={courseArtist} onChange={(e) => setCourseArtist(e.target.value)} placeholder="Artist / Creator"
+                style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              <input value={courseLink} onChange={(e) => setCourseLink(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && courseName.trim()) {
+                    let url = courseLink.trim(); if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+                    setArtCourses((prev) => [...prev, { id: Date.now(), name: courseName.trim(), artist: courseArtist.trim(), link: url, image: courseImage }]);
+                    setCourseName(""); setCourseArtist(""); setCourseLink(""); setCourseImage("");
+                  }
+                }}
+                placeholder="Link URL"
+                style={{ width: "100%", fontFamily: base.fontSans, fontSize: 11, padding: "6px 8px", border: `1px solid ${theme.border}`, background: theme.salmon, color: theme.text, outline: "none", boxSizing: "border-box" }} />
+              <input ref={courseFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
+                const file = e.target.files?.[0]; if (!file) return;
+                const reader = new FileReader(); reader.onload = () => setCourseImage(reader.result); reader.readAsDataURL(file);
+                e.target.value = "";
+              }} />
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <div onClick={() => courseFileRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f && f.type.startsWith("image/")) { const r = new FileReader(); r.onload = () => setCourseImage(r.result); r.readAsDataURL(f); } }}
+                  style={{
+                    flex: 1, fontFamily: base.fontSans, fontSize: 9, padding: "8px 0", textAlign: "center",
+                    border: `1px dashed ${theme.border}`, background: courseImage ? theme.light : theme.salmon,
+                    color: theme.muted, cursor: "pointer", letterSpacing: 0.3,
+                  }}>{courseImage ? "Image added ✓" : "Drop/click for cover image"}</div>
+                <button onClick={() => {
+                  if (!courseName.trim()) return;
+                  let url = courseLink.trim(); if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+                  setArtCourses((prev) => [...prev, { id: Date.now(), name: courseName.trim(), artist: courseArtist.trim(), link: url, image: courseImage }]);
+                  setCourseName(""); setCourseArtist(""); setCourseLink(""); setCourseImage("");
+                }} style={{
+                  fontFamily: base.fontSans, fontSize: 10, padding: "8px 12px",
+                  border: "none", background: theme.dark, color: theme.paper, cursor: "pointer",
+                  opacity: courseName.trim() ? 1 : 0.4,
+                }}>Add</button>
+              </div>
+            </div>
+          )}
+          <div style={{ maxHeight: 400, overflowY: "auto", padding: "8px 12px" }}>
+            {artCourses.length === 0 ? (
+              <div style={{ fontFamily: base.fontBody, fontSize: 12, color: theme.muted, fontStyle: "italic", textAlign: "center", padding: "16px 0" }}>Click title to add courses.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {artCourses.map((c) => (
+                  <div key={c.id} style={{ borderBottom: `1px solid ${theme.light}`, paddingBottom: 8, position: "relative" }}>
+                    {c.image && (
+                      <a href={c.link || "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+                        <img src={c.image} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 2, marginBottom: 6, background: theme.light, display: "block", cursor: "pointer" }} />
+                      </a>
+                    )}
+                    <a href={c.link || "#"} target="_blank" rel="noopener noreferrer" style={{ fontFamily: base.fontSans, fontSize: 12, fontWeight: 600, color: theme.text, textDecoration: "none", display: "block", lineHeight: 1.3 }}>
+                      {c.name}
+                    </a>
+                    {c.artist && <div style={{ fontFamily: base.fontSans, fontSize: 10, color: theme.muted, marginTop: 2 }}>{c.artist}</div>}
+                    <button onClick={() => setArtCourses((prev) => prev.filter((x) => x.id !== c.id))} style={{
+                      position: "absolute", top: 4, right: 4, fontSize: 11, color: theme.muted,
+                      background: "rgba(255,255,255,0.8)", border: "none", cursor: "pointer", borderRadius: 2, padding: "1px 4px",
+                    }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
 
-      {/* Col 2: Twitter Art */}
-      <div>
-        {renderFeedColumn({
-          title: "Twitter Art", feeds: inspFeeds, arts: allInspArticles, ld: inspLoading,
-          nameVal: feedName, setNameVal: setFeedName, urlVal: feedUrl, setUrlVal: setFeedUrl,
-          addFn: addInspFeed, removeFn: removeInspFeed, fileRef: inspFileRef,
-          onFileInput: (e) => handleFileInput(e, setInspFeeds, feedName.trim()),
-          dragOver: dragOverInsp, setDragOver: setDragOverInsp,
-          onDrop: (e) => handleFileDrop(e, setInspFeeds, feedName.trim()),
-          expandKey: "inspExpand",
-        })}
+      {/* Col 2: Twitter Art (matched height) */}
+      <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {renderFeedColumn({
+            title: "Twitter Art", feeds: inspFeeds, arts: allInspArticles, ld: inspLoading,
+            nameVal: feedName, setNameVal: setFeedName, urlVal: feedUrl, setUrlVal: setFeedUrl,
+            addFn: addInspFeed, removeFn: removeInspFeed, fileRef: inspFileRef,
+            onFileInput: (e) => handleFileInput(e, setInspFeeds, feedName.trim()),
+            dragOver: dragOverInsp, setDragOver: setDragOverInsp,
+            onDrop: (e) => handleFileDrop(e, setInspFeeds, feedName.trim()),
+            expandKey: "inspExpand",
+          })}
+        </div>
       </div>
 
       {/* Col 3: Pinterest Board Widget */}
@@ -4028,17 +4109,19 @@ function ArtPage() {
         </Card>
       </div>
 
-      {/* Col 4: YouTube Art */}
-      <div>
-        {renderFeedColumn({
-          title: "YouTube Art", feeds: ytFeeds, arts: allYtArticlesList, ld: ytLoading,
-          nameVal: ytName, setNameVal: setYtName, urlVal: ytUrl, setUrlVal: setYtUrl,
-          addFn: addYtFeed, removeFn: removeYtFeed, fileRef: ytFileRef,
-          onFileInput: (e) => handleFileInput(e, setYtFeeds, ytName.trim()),
-          dragOver: dragOverYt, setDragOver: setDragOverYt,
-          onDrop: (e) => handleFileDrop(e, setYtFeeds, ytName.trim()),
-          expandKey: "ytExpand",
-        })}
+      {/* Col 4: YouTube Art (matched height) */}
+      <div style={{ alignSelf: "stretch", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+          {renderFeedColumn({
+            title: "YouTube Art", feeds: ytFeeds, arts: allYtArticlesList, ld: ytLoading,
+            nameVal: ytName, setNameVal: setYtName, urlVal: ytUrl, setUrlVal: setYtUrl,
+            addFn: addYtFeed, removeFn: removeYtFeed, fileRef: ytFileRef,
+            onFileInput: (e) => handleFileInput(e, setYtFeeds, ytName.trim()),
+            dragOver: dragOverYt, setDragOver: setDragOverYt,
+            onDrop: (e) => handleFileDrop(e, setYtFeeds, ytName.trim()),
+            expandKey: "ytExpand",
+          })}
+        </div>
       </div>
     </div>
   );
